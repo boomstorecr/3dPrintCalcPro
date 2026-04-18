@@ -1,7 +1,11 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, Plus, List, Settings, LogOut } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Sidebar({ isOpen, setIsOpen }) {
+  const navigate = useNavigate();
+  const { logout, userProfile } = useAuth();
+
   const navItems = [
     { name: 'Dashboard', href: '/', icon: Home },
     { name: 'New Quote', href: '/quotes/new', icon: Plus },
@@ -65,8 +69,14 @@ export default function Sidebar({ isOpen, setIsOpen }) {
               </div>
             </div>
             <div className="ml-3 flex flex-1 flex-col justify-center min-w-0">
-              <p className="truncate text-sm font-medium text-white">Default User</p>
-              <button className="flex text-xs font-medium text-slate-400 hover:text-white items-center gap-1 transition-colors outline-none text-left">
+              <p className="truncate text-sm font-medium text-white">{userProfile?.name || 'Default User'}</p>
+              <button
+                onClick={async () => {
+                  await logout();
+                  navigate('/login');
+                }}
+                className="flex text-xs font-medium text-slate-400 hover:text-white items-center gap-1 transition-colors outline-none text-left"
+              >
                 <LogOut className="h-3 w-3" />
                 Logout
               </button>

@@ -1,0 +1,37 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isCompanyMember(companyId) {
+      return isAuthenticated() && getUserData().company_id == companyId;
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isCompanyMember(companyId) && getUserData().role == 'Admin';
+    }
+
+    // Company logos: only admins write, members read
+    match /logos/{companyId}/{allPaths=**} {
+      allow read: if isCompanyMember(companyId);
+      allow write: if isCompanyAdmin(companyId);
+    }
+
+    // Quote photos: company members write and read
+    match /quotes/{companyId}/{allPaths=**} {
+      allow read: if isCompanyMember(companyId);
+      allow write: if isCompanyMember(companyId);
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

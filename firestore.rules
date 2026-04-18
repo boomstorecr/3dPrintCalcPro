@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isCompanyMember(companyId) {
+      return isAuthenticated() && getUserData().company_id == companyId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'Admin';
+    }
+
+    function isCompanyAdmin(companyId) {
+      return isCompanyMember(companyId) && isAdmin();
+    }
+
+    // Companies
+    match /companies/{companyId} {
+      allow read: if isCompanyMember(companyId);
+      allow create, update, delete: if isCompanyAdmin(companyId);
+
+      // Invites for joining flow
+      match /invites/{inviteId} {
+        allow read: if true;
+        allow create, update, delete: if isCompanyAdmin(companyId);
+      }
+    }
+
+    // Users
+    match /users/{userId} {
+      allow read: if isAuthenticated()
+        && (
+          request.auth.uid == userId
+          || (isAdmin() && resource.data.company_id == getUserData().company_id)
+        );
+
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      allow update: if isAuthenticated()
+        && (
+          request.auth.uid == userId
+          || (isAdmin() && resource.data.company_id == getUserData().company_id)
+        );
+
+      allow delete: if isAuthenticated()
+        && isAdmin()
+        && resource.data.company_id == getUserData().company_id;
+    }
+
+    // Materials
+    match /materials/{materialId} {
+      allow read: if isAuthenticated()
+        && resource.data.company_id == getUserData().company_id;
+
+      allow create: if isAuthenticated()
+        && request.resource.data.company_id == getUserData().company_id;
+
+      allow update: if isAuthenticated()
+        && resource.data.company_id == getUserData().company_id
+        && request.resource.data.company_id == getUserData().company_id;
+
+      allow delete: if isAuthenticated()
+        && isAdmin()
+        && resource.data.company_id == getUserData().company_id;
+    }
+
+    // Quotes
+    match /quotes/{quoteId} {
+      allow read: if isAuthenticated()
+        && resource.data.company_id == getUserData().company_id;
+
+      allow create: if isAuthenticated()
+        && request.resource.data.company_id == getUserData().company_id;
+
+      allow update: if isAuthenticated()
+        && resource.data.company_id == getUserData().company_id
+        && request.resource.data.company_id == getUserData().company_id;
+
+      allow delete: if isAuthenticated()
+        && isAdmin()
+        && resource.data.company_id == getUserData().company_id;
+    }
+
+    // Default deny for all other documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,6 +1,11 @@
 import { Menu } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Topbar({ setIsSidebarOpen }) {
+  const { userProfile } = useAuth();
+  const displayName = userProfile?.display_name || 'User';
+  const initials = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
   return (
     <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 bg-white shadow-sm border-b border-slate-200">
       <button
@@ -24,10 +29,10 @@ export default function Topbar({ setIsSidebarOpen }) {
         <div className="ml-4 flex items-center md:ml-6 space-x-4">
           <div className="hidden md:flex flex-col text-right">
             <span className="text-sm font-semibold text-slate-900 leading-none">
-              Default User
+              {displayName}
             </span>
             <span className="text-xs font-medium text-slate-500">
-              Admin
+              {userProfile?.role || 'User'}
             </span>
           </div>
           <button
@@ -36,7 +41,7 @@ export default function Topbar({ setIsSidebarOpen }) {
           >
             <span className="sr-only">Open user menu</span>
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold border border-blue-200">
-              U
+              {initials}
             </div>
           </button>
         </div>

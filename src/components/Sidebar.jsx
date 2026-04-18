@@ -65,11 +65,11 @@ export default function Sidebar({ isOpen, setIsOpen }) {
           <div className="flex items-center w-full">
             <div>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-700 text-sm font-medium text-white shadow-inner border border-slate-600">
-                U
+                {(userProfile?.display_name || 'U').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
               </div>
             </div>
             <div className="ml-3 flex flex-1 flex-col justify-center min-w-0">
-              <p className="truncate text-sm font-medium text-white">{userProfile?.name || 'Default User'}</p>
+              <p className="truncate text-sm font-medium text-white">{userProfile?.display_name || 'User'}</p>
               <button
                 onClick={async () => {
                   await logout();

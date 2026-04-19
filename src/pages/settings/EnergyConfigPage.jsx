@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -10,10 +11,6 @@ import { db } from '../../lib/firebase';
 
 const DEFAULT_FORM = {
   kwh_cost: '0',
-  printer_wattage: '0',
-  hourly_amortization_fee: '0',
-  base_profit_margin: '0',
-  failure_margin: '0',
 };
 
 export default function EnergyConfigPage() {
@@ -50,10 +47,6 @@ export default function EnergyConfigPage() {
 
         setFormValues({
           kwh_cost: String(config.kwh_cost ?? 0),
-          printer_wattage: String(config.printer_wattage ?? 0),
-          hourly_amortization_fee: String(config.hourly_amortization_fee ?? 0),
-          base_profit_margin: String((config.base_profit_margin ?? 0) * 100),
-          failure_margin: String((config.failure_margin ?? 0) * 100),
         });
       } catch (loadError) {
         console.error('[EnergyConfigPage] Failed to load config', loadError);
@@ -81,10 +74,6 @@ export default function EnergyConfigPage() {
 
     const parsedValues = {
       kwh_cost: Number(formValues.kwh_cost),
-      printer_wattage: Number(formValues.printer_wattage),
-      hourly_amortization_fee: Number(formValues.hourly_amortization_fee),
-      base_profit_margin_percent: Number(formValues.base_profit_margin),
-      failure_margin_percent: Number(formValues.failure_margin),
     };
 
     const invalidNumericValue = Object.values(parsedValues).some(
@@ -97,21 +86,9 @@ export default function EnergyConfigPage() {
     }
 
     if (
-      parsedValues.kwh_cost < 0 ||
-      parsedValues.printer_wattage < 0 ||
-      parsedValues.hourly_amortization_fee < 0
+      parsedValues.kwh_cost < 0
     ) {
-      error('Cost and machine values must be non-negative.');
-      return;
-    }
-
-    if (parsedValues.failure_margin_percent < 0 || parsedValues.failure_margin_percent > 100) {
-      error('Failure margin must be between 0% and 100%.');
-      return;
-    }
-
-    if (parsedValues.base_profit_margin_percent < 0 || parsedValues.base_profit_margin_percent > 1000) {
-      error('Profit margin must be between 0% and 1000%.');
+      error('kWh cost must be non-negative.');
       return;
     }
 
@@ -121,10 +98,6 @@ export default function EnergyConfigPage() {
       const companyRef = doc(db, 'companies', companyId);
       await updateDoc(companyRef, {
         'global_config.kwh_cost': parsedValues.kwh_cost,
-        'global_config.printer_wattage': parsedValues.printer_wattage,
-        'global_config.hourly_amortization_fee': parsedValues.hourly_amortization_fee,
-        'global_config.base_profit_margin': parsedValues.base_profit_margin_percent / 100,
-        'global_config.failure_margin': parsedValues.failure_margin_percent / 100,
       });
 
       success('Energy configuration saved successfully.');
@@ -138,7 +111,7 @@ export default function EnergyConfigPage() {
 
   if (!isAdmin) {
     return (
-      <Card title="Energy Configuration">
+      <Card title="Energy & Electricity">
         <p className="text-sm text-gray-600">Only administrators can edit energy and pricing settings.</p>
       </Card>
     );
@@ -154,8 +127,16 @@ export default function EnergyConfigPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Energy Configuration">
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+      <Card title="Energy & Electricity">
+        <p className="mb-4 text-sm text-gray-600">
+          Printer-specific settings like wattage, hourly fees, and margins are now configured per printer in the{' '}
+          <Link to="/settings/printers" className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
+            Printers section
+          </Link>
+          .
+        </p>
+
+        <div className="grid grid-cols-1 gap-5">
           <Input
             id="kwh-cost"
             type="number"
@@ -164,48 +145,6 @@ export default function EnergyConfigPage() {
             label="Cost per kWh"
             value={formValues.kwh_cost}
             onChange={handleChange('kwh_cost')}
-          />
-
-          <Input
-            id="printer-wattage"
-            type="number"
-            min="0"
-            step="1"
-            label="Printer Wattage"
-            value={formValues.printer_wattage}
-            onChange={handleChange('printer_wattage')}
-          />
-
-          <Input
-            id="hourly-amortization-fee"
-            type="number"
-            min="0"
-            step="0.01"
-            label="Hourly Machine Fee"
-            value={formValues.hourly_amortization_fee}
-            onChange={handleChange('hourly_amortization_fee')}
-          />
-
-          <Input
-            id="base-profit-margin"
-            type="number"
-            min="0"
-            max="1000"
-            step="0.01"
-            label="Profit Margin %"
-            value={formValues.base_profit_margin}
-            onChange={handleChange('base_profit_margin')}
-          />
-
-          <Input
-            id="failure-margin"
-            type="number"
-            min="0"
-            max="100"
-            step="0.01"
-            label="Failure Margin %"
-            value={formValues.failure_margin}
-            onChange={handleChange('failure_margin')}
           />
         </div>
 

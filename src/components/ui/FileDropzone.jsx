@@ -3,6 +3,8 @@ import { useState, useRef } from 'react';
 export function FileDropzone({ 
   accept, 
   onFile, 
+  multiple = false,
+  onFiles,
   label = 'Drop file here or click to upload', 
   disabled = false, 
   className = '' 
@@ -28,6 +30,22 @@ export function FileDropzone({
     e.stopPropagation();
   };
 
+  const getAcceptedFiles = (files) => {
+    if (!accept) return files;
+
+    const extensions = accept
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry) => entry.startsWith('.'));
+
+    if (extensions.length === 0) return files;
+
+    return files.filter((file) => {
+      const fileName = file.name.toLowerCase();
+      return extensions.some((extension) => fileName.endsWith(extension));
+    });
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -35,6 +53,17 @@ export function FileDropzone({
     setIsDragActive(false);
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (multiple) {
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        const acceptedFiles = getAcceptedFiles(droppedFiles);
+        setSelectedFileName(
+          acceptedFiles.length > 0 ? `${acceptedFiles.length} files selected` : null
+        );
+        if (onFiles) onFiles(acceptedFiles);
+        e.dataTransfer.clearData();
+        return;
+      }
+
       const file = e.dataTransfer.files[0];
       setSelectedFileName(file.name);
       if (onFile) onFile(file);
@@ -47,6 +76,16 @@ export function FileDropzone({
     if (disabled) return;
     
     if (e.target.files && e.target.files.length > 0) {
+      if (multiple) {
+        const selectedFiles = Array.from(e.target.files);
+        const acceptedFiles = getAcceptedFiles(selectedFiles);
+        setSelectedFileName(
+          acceptedFiles.length > 0 ? `${acceptedFiles.length} files selected` : null
+        );
+        if (onFiles) onFiles(acceptedFiles);
+        return;
+      }
+
       const file = e.target.files[0];
       setSelectedFileName(file.name);
       if (onFile) onFile(file);
@@ -76,6 +115,7 @@ export function FileDropzone({
         ref={inputRef}
         type="file"
         accept={accept}
+        multiple={multiple}
         onChange={handleChange}
         disabled={disabled}
         className="hidden"

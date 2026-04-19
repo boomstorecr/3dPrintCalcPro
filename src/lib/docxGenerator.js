@@ -123,11 +123,24 @@ function resolveMaterials(quoteData) {
     return {
       name: item?.name || item?.materialName || `Material ${index + 1}`,
       type: item?.type || item?.materialType || 'N/A',
+      color: item?.color || item?.materialColor || null,
       weight,
       costPerKg,
       subtotal,
     };
   });
+}
+
+function resolveEstimatedGrams(fileData) {
+  const estimatedGrams = toNumber(fileData?.estimatedGrams ?? fileData?.estimated_grams);
+  if (estimatedGrams > 0) return estimatedGrams;
+
+  const volumeCm3 = toNumber(fileData?.volumeCm3 ?? fileData?.volume_cm3 ?? fileData?.volume);
+  if (volumeCm3 > 0) {
+    return volumeCm3 * 1.24;
+  }
+
+  return 0;
 }
 
 function resolveBreakdown(quoteData) {
@@ -162,10 +175,15 @@ function resolveBreakdown(quoteData) {
   };
 }
 
-function resolvePrintInfo(quoteData) {
+function resolvePrintInfo(quoteData, fileDataArray = []) {
   const printHours = toNumber(quoteData?.print_hours ?? quoteData?.printHours ?? quoteData?.totalPrintHours);
+  const legacyFileData = Array.isArray(quoteData?.file_data) ? null : quoteData?.file_data;
   const partCount = toNumber(
-    quoteData?.file_data?.partCount ?? quoteData?.importedModel?.partCount ?? quoteData?.partCount ?? quoteData?.partsCount
+    legacyFileData?.partCount ??
+      quoteData?.importedModel?.partCount ??
+      quoteData?.partCount ??
+      quoteData?.partsCount ??
+      fileDataArray.length
   );
 
   return {
@@ -203,10 +221,15 @@ export async function generateQuoteDocx(quoteData, companyData) {
   const currency = resolveCurrency(companyData);
   const quoteDate = getQuoteDate(quoteData);
   const expirationDate = getExpirationDate(quoteData);
+  const fileDataArray = Array.isArray(quoteData.file_data)
+    ? quoteData.file_data
+    : quoteData.file_data
+      ? [quoteData.file_data]
+      : [];
 
   const materials = resolveMaterials(quoteData);
   const breakdown = resolveBreakdown(quoteData);
-  const printInfo = resolvePrintInfo(quoteData);
+  const printInfo = resolvePrintInfo(quoteData, fileDataArray);
 
   const clientName = resolveClientName(quoteData);
   const designUrl = quoteData?.client?.designUrl || quoteData?.design_url || quoteData?.designUrl;
@@ -256,7 +279,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
     ...materials.map((material) =>
       new TableRow({
         children: [
-          makeCell(material.name),
+          makeCell(material.color ? `${material.name} (${material.color})` : material.name),
           makeCell(material.weight.toFixed(2)),
         ],
       })
@@ -310,6 +333,63 @@ export async function generateQuoteDocx(quoteData, companyData) {
           new Paragraph({
             children: [new TextRun(`Number of parts: ${printInfo.partCount || 0}`)],
           }),
+          ...(() => {
+            const printerSnapshot = quoteData?.printer_snapshot;
+            if (!printerSnapshot) {
+              return [];
+            }
+
+            const printerText = `${printerSnapshot.name}${printerSnapshot.brand ? ` (${printerSnapshot.brand})` : ''} - ${printerSnapshot.type || 'N/A'}, ${printerSnapshot.wattage || 0}W`;
+
+            return [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: 'Printer: ', bold: true }),
+                  new TextRun(printerText),
+                ],
+              }),
+            ];
+          })(),
+          ...(() => {
+            if (fileDataArray.length === 0) return [];
+
+            if (fileDataArray.length === 1) {
+              const file = fileDataArray[0] || {};
+              const fileName = file?.name || file?.fileName || file?.filename || 'N/A';
+              const fileType = file?.type || file?.fileType || file?.format || 'N/A';
+              const estimatedGrams = resolveEstimatedGrams(file);
+
+              return [
+                new Paragraph({
+                  children: [
+                    new TextRun(
+                      `File: ${fileName} | Type: ${fileType} | Filament: ${estimatedGrams.toFixed(2)} g`
+                    ),
+                  ],
+                }),
+              ];
+            }
+
+            return [
+              new Paragraph({ text: '' }),
+              new Paragraph({
+                children: [new TextRun({ text: 'Files', bold: true })],
+              }),
+              ...fileDataArray.map((file, index) => {
+                const fileName = file?.name || file?.fileName || file?.filename || `File ${index + 1}`;
+                const fileType = file?.type || file?.fileType || file?.format || 'N/A';
+                const estimatedGrams = resolveEstimatedGrams(file);
+
+                return new Paragraph({
+                  children: [
+                    new TextRun(
+                      `${index + 1}. ${fileName} | Type: ${fileType} | Filament: ${estimatedGrams.toFixed(2)} g`
+                    ),
+                  ],
+                });
+              }),
+            ];
+          })(),
           ...(designUrl
             ? [
                 new Paragraph({ text: '' }),

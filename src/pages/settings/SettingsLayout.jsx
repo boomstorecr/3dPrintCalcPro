@@ -2,7 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom';
 
 const SETTINGS_TABS = [
   { label: 'Company Profile', to: '/settings/profile' },
-  { label: 'Energy & Costs', to: '/settings/energy' },
+  { label: 'Electricity', to: '/settings/energy' },
+  { label: 'Printers', to: '/settings/printers' },
   { label: 'Materials', to: '/settings/materials' },
   { label: 'Team', to: '/settings/team' },
 ];

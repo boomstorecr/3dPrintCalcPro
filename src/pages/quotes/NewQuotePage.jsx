@@ -10,17 +10,17 @@ import CostBreakdown from '../../components/CostBreakdown';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { getMaterials } from '../../lib/materials';
+import { getPrinters } from '../../lib/printers';
 import { calculateQuote } from '../../lib/pricingEngine';
 import { db } from '../../lib/firebase';
 import { createQuote, getQuote, updateQuote } from '../../lib/quotes';
 import { uploadQuotePhoto } from '../../lib/storage';
 
-const DEFAULT_DENSITY_G_CM3 = 1.24;
-
-const createMaterialRow = (grams = '') => ({
+const createMaterialRow = (grams = '', color = null) => ({
   id: crypto.randomUUID(),
   materialId: '',
   grams: grams === '' ? '' : String(grams),
+  color,
 });
 
 const createExtraCostRow = () => ({
@@ -56,13 +56,17 @@ export default function NewQuotePage() {
   const [notes, setNotes] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
 
-  const [importedModel, setImportedModel] = useState(null);
+  const [importedFiles, setImportedFiles] = useState(null);
   const [currentPhotoUrl, setCurrentPhotoUrl] = useState('');
 
   const [materialsCatalog, setMaterialsCatalog] = useState([]);
   const [materialRows, setMaterialRows] = useState([createMaterialRow()]);
+  const [printers, setPrinters] = useState([]);
+  const [selectedPrinterId, setSelectedPrinterId] = useState('');
+  const [loadingPrinters, setLoadingPrinters] = useState(true);
 
   const [printHours, setPrintHours] = useState('');
+  const [printHoursAutoFilled, setPrintHoursAutoFilled] = useState(false);
 
   const [extraCostRows, setExtraCostRows] = useState([createExtraCostRow()]);
 
@@ -106,6 +110,30 @@ export default function NewQuotePage() {
   }, [companyId, error]);
 
   useEffect(() => {
+    const loadPrinters = async () => {
+      if (!companyId) {
+        setPrinters([]);
+        setLoadingPrinters(false);
+        return;
+      }
+
+      setLoadingPrinters(true);
+
+      try {
+        const rows = await getPrinters(companyId);
+        setPrinters(rows);
+      } catch (loadError) {
+        console.error('[NewQuotePage] Failed to load printers', loadError);
+        error('Failed to load printers.');
+      } finally {
+        setLoadingPrinters(false);
+      }
+    };
+
+    loadPrinters();
+  }, [companyId, error]);
+
+  useEffect(() => {
     const loadCompanyConfig = async () => {
       if (!companyId) {
         setLoadingCompanyConfig(false);
@@ -131,10 +159,10 @@ export default function NewQuotePage() {
 
         setCompanyConfig({
           kwhCost: parseNumeric(globalConfig.kwh_cost ?? companyData.kwhCost),
-          printerWattage: parseNumeric(globalConfig.printer_wattage ?? companyData.printerWattage),
-          hourlyAmortizationFee: parseNumeric(globalConfig.hourly_amortization_fee ?? companyData.hourlyAmortizationFee),
-          profitMargin: parseNumeric(globalConfig.base_profit_margin ?? companyData.profitMargin),
-          failureMargin: parseNumeric(globalConfig.failure_margin ?? companyData.failureMargin),
+          printerWattage: 0,
+          hourlyAmortizationFee: 0,
+          profitMargin: 0,
+          failureMargin: 0,
           currency: companyData.currency || globalConfig.currency || 'USD',
         });
       } catch (loadError) {
@@ -147,6 +175,32 @@ export default function NewQuotePage() {
 
     loadCompanyConfig();
   }, [companyId, error]);
+
+  useEffect(() => {
+    if (!selectedPrinterId) {
+      setCompanyConfig((prev) => ({
+        ...prev,
+        printerWattage: 0,
+        hourlyAmortizationFee: 0,
+        profitMargin: 0,
+        failureMargin: 0,
+      }));
+      return;
+    }
+
+    const printer = printers.find((p) => p.id === selectedPrinterId);
+    if (!printer) {
+      return;
+    }
+
+    setCompanyConfig((prev) => ({
+      ...prev,
+      printerWattage: parseNumeric(printer.wattage),
+      hourlyAmortizationFee: parseNumeric(printer.hourly_amortization_fee),
+      profitMargin: parseNumeric(printer.profit_margin),
+      failureMargin: parseNumeric(printer.failure_margin),
+    }));
+  }, [selectedPrinterId, printers]);
 
   useEffect(() => {
     const sourceQuoteId = editQuoteId || duplicateQuoteId;
@@ -188,6 +242,7 @@ export default function NewQuotePage() {
                 id: crypto.randomUUID(),
                 materialId: String(material.materialId ?? material.material_id ?? ''),
                 grams: material.grams === '' ? '' : String(material.grams ?? ''),
+                color: material.color || null,
               }))
             : [createMaterialRow()];
 
@@ -206,7 +261,12 @@ export default function NewQuotePage() {
             : [createExtraCostRow()];
 
         const fileData = quote.file_data || quote.importedModel || null;
-        const totalMaterialGrams = mappedMaterialRows.reduce((sum, row) => sum + parseNumeric(row.grams), 0);
+        let filesArray = [];
+        if (Array.isArray(fileData)) {
+          filesArray = fileData;
+        } else if (fileData && typeof fileData === 'object') {
+          filesArray = [fileData];
+        }
 
         setClientName(initialClientName);
         setDesignUrl(initialDesignUrl);
@@ -224,17 +284,32 @@ export default function NewQuotePage() {
         setMaterialRows(mappedMaterialRows);
         setExtraCostRows(mappedExtraCostRows);
         setPrintHours(String(quote.print_hours ?? quote.printHours ?? ''));
+        setPrintHoursAutoFilled(false);
+        if (quote.printer_id) {
+          setSelectedPrinterId(String(quote.printer_id));
+        } else {
+          setSelectedPrinterId('');
+        }
 
-        if (fileData) {
-          setImportedModel({
-            fileName: String(fileData.fileName || ''),
-            fileType: String(fileData.fileType || ''),
-            volumeCm3: parseNumeric(fileData.volumeCm3),
-            partCount: Math.max(1, parseNumeric(fileData.partCount) || 1),
-            estimatedWeight: Number(totalMaterialGrams.toFixed(2)),
+        if (filesArray.length > 0) {
+          setImportedFiles({
+            files: filesArray.map((f) => ({
+              fileName: f.fileName || '',
+              fileType: f.fileType || '',
+              volumeCm3: parseNumeric(f.volumeCm3),
+              partCount: parseNumeric(f.partCount) || 1,
+              estimatedGrams: parseNumeric(f.estimatedGrams),
+              estimatedHours: parseNumeric(f.estimatedHours),
+              plates: [],
+              colorEntries: [],
+              objects: [],
+            })),
+            totalGrams: filesArray.reduce((sum, f) => sum + parseNumeric(f.estimatedGrams), 0),
+            totalHours: filesArray.reduce((sum, f) => sum + parseNumeric(f.estimatedHours), 0),
+            colorEntries: [],
           });
         } else {
-          setImportedModel(null);
+          setImportedFiles(null);
         }
       } catch (loadError) {
         console.error('[NewQuotePage] Failed to load source quote', loadError);
@@ -304,35 +379,41 @@ export default function NewQuotePage() {
     });
   }, [materialRows, materialsCatalog, printHours, extraCostRows, companyConfig]);
 
-  const handleFileResult = (result) => {
-    const volumeCm3 = parseNumeric(result?.volumeCm3);
-    const partCount = Math.max(1, parseNumeric(result?.partCount));
-    const estimatedWeight = Number((volumeCm3 * DEFAULT_DENSITY_G_CM3).toFixed(2));
+  const handleFileResult = (aggregated) => {
+    setImportedFiles(aggregated);
 
-    setImportedModel({
-      fileName: result?.fileName || '',
-      fileType: result?.fileType || '',
-      volumeCm3,
-      partCount,
-      estimatedWeight,
-    });
+    if (aggregated.totalHours > 0 && !printHoursAutoFilled) {
+      const currentHours = parseNumeric(printHours);
+      if (currentHours <= 0) {
+        setPrintHours(String(aggregated.totalHours.toFixed(2)));
+        setPrintHoursAutoFilled(true);
+      }
+    }
 
-    setMaterialRows((prev) =>
-      prev.map((row) => {
-        if (row.grams !== '' && parseNumeric(row.grams) > 0) {
-          return row;
-        }
+    const hasManualMaterials = materialRows.some((row) => row.materialId !== '');
 
-        return {
-          ...row,
-          grams: String(estimatedWeight),
-        };
-      })
-    );
+    if (!hasManualMaterials) {
+      if (aggregated.colorEntries && aggregated.colorEntries.length > 0) {
+        const newRows = aggregated.colorEntries.map((entry) => createMaterialRow(entry.grams.toFixed(2), entry.color));
+        setMaterialRows(newRows);
+      } else if (aggregated.totalGrams > 0) {
+        setMaterialRows([createMaterialRow(aggregated.totalGrams.toFixed(2))]);
+      }
+    }
   };
 
   const handleFileClear = () => {
-    setImportedModel(null);
+    setImportedFiles(null);
+    setMaterialRows([createMaterialRow()]);
+    if (printHoursAutoFilled) {
+      setPrintHours('');
+      setPrintHoursAutoFilled(false);
+    }
+  };
+
+  const handlePrintHoursChange = (event) => {
+    setPrintHours(event.target.value);
+    setPrintHoursAutoFilled(false);
   };
 
   const handleMaterialRowChange = (id, field, value) => {
@@ -351,7 +432,7 @@ export default function NewQuotePage() {
   };
 
   const handleAddMaterialRow = () => {
-    setMaterialRows((prev) => [...prev, createMaterialRow(importedModel?.estimatedWeight || '')]);
+    setMaterialRows((prev) => [...prev, createMaterialRow()]);
   };
 
   const handleRemoveMaterialRow = (id) => {
@@ -402,6 +483,7 @@ export default function NewQuotePage() {
           materialName: selectedMaterial?.name || selectedMaterial?.type || 'Unnamed Material',
           grams: parseNumeric(row.grams),
           costPerKg: parseNumeric(selectedMaterial?.cost_per_kg ?? selectedMaterial?.costPerKg),
+          color: row.color || null,
         };
       });
 
@@ -432,6 +514,8 @@ export default function NewQuotePage() {
       extraCosts,
     });
 
+    const selectedPrinter = printers.find((p) => p.id === selectedPrinterId);
+
     const quoteData = {
       company_id: companyId,
       user_id: user.uid,
@@ -443,15 +527,30 @@ export default function NewQuotePage() {
       cost_breakdown: calculateResult,
       total_price: calculateResult.totalPrice,
       status: 'draft',
-      file_data: {
-        fileName: importedModel?.fileName || '',
-        fileType: importedModel?.fileType || '',
-        volumeCm3: parseNumeric(importedModel?.volumeCm3),
-        partCount: Math.max(1, parseNumeric(importedModel?.partCount) || 1),
-      },
+      file_data:
+        importedFiles?.files?.map((f) => ({
+          fileName: f.fileName,
+          fileType: f.fileType,
+          volumeCm3: f.volumeCm3 || 0,
+          partCount: f.partCount || 0,
+          estimatedGrams: f.estimatedGrams || 0,
+          estimatedHours: f.estimatedHours || 0,
+        })) || [],
       materials: materialLines,
       print_hours: parseNumeric(printHours),
       extra_costs: extraCosts,
+      printer_id: selectedPrinterId || null,
+      printer_snapshot: selectedPrinter
+        ? {
+            name: selectedPrinter.name,
+            brand: selectedPrinter.brand || '',
+            type: selectedPrinter.type || '',
+            wattage: parseNumeric(selectedPrinter.wattage),
+            hourly_amortization_fee: parseNumeric(selectedPrinter.hourly_amortization_fee),
+            profit_margin: parseNumeric(selectedPrinter.profit_margin),
+            failure_margin: parseNumeric(selectedPrinter.failure_margin),
+          }
+        : null,
     };
 
     setSavingDraft(true);
@@ -531,20 +630,63 @@ export default function NewQuotePage() {
         </Card>
 
         <Card title="3D File Import">
-          <div className="space-y-4">
-            <FileImport onResult={handleFileResult} onClear={handleFileClear} />
-            {importedModel && (
-              <div className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700 sm:grid-cols-3">
-                <p>
-                  <span className="font-medium text-gray-900">Volume:</span> {importedModel.volumeCm3.toFixed(2)} cm3
-                </p>
-                <p>
-                  <span className="font-medium text-gray-900">Part Count:</span> {importedModel.partCount}
-                </p>
-                <p>
-                  <span className="font-medium text-gray-900">Estimated Weight:</span> {importedModel.estimatedWeight.toFixed(2)} g
-                </p>
+          <FileImport onResult={handleFileResult} onClear={handleFileClear} />
+        </Card>
+
+        <Card title="Printer Selection">
+          <div className="space-y-3">
+            {loadingPrinters && <p className="text-sm text-gray-500">Loading printers...</p>}
+
+            {!loadingPrinters && printers.length === 0 && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                No printers configured yet. Add printers in{' '}
+                <Link to="/settings/printers" className="font-semibold underline">
+                  Printer Settings
+                </Link>
+                .
               </div>
+            )}
+
+            {!loadingPrinters && printers.length > 0 && (
+              <>
+                <Select
+                  id="printer-select"
+                  label="Printer"
+                  value={selectedPrinterId}
+                  onChange={(event) => setSelectedPrinterId(event.target.value)}
+                  options={printers.map((p) => ({
+                    value: p.id,
+                    label: `${p.name}${p.brand ? ` (${p.brand})` : ''}`,
+                  }))}
+                  placeholder="Select a printer"
+                />
+
+                {selectedPrinterId &&
+                  (() => {
+                    const printer = printers.find((p) => p.id === selectedPrinterId);
+                    if (!printer) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="grid grid-cols-2 gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 sm:grid-cols-4">
+                        <div>
+                          <span className="font-medium text-gray-900">Type:</span> {printer.type || 'N/A'}
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Wattage:</span> {printer.wattage || 0}W
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Hourly Fee:</span> ${parseNumeric(printer.hourly_amortization_fee).toFixed(2)}/hr
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-900">Profit:</span>{' '}
+                          {(parseNumeric(printer.profit_margin) * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                    );
+                  })()}
+              </>
             )}
           </div>
         </Card>
@@ -565,6 +707,16 @@ export default function NewQuotePage() {
 
             {materialRows.map((row, index) => (
               <div key={row.id} className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-4 md:grid-cols-12">
+                {row.color && row.color !== 'default' && (
+                  <div className="flex items-center gap-2 md:col-span-12">
+                    <span
+                      className="inline-block h-4 w-4 rounded-full border border-gray-300"
+                      style={{ backgroundColor: row.color }}
+                    />
+                    <span className="text-xs text-gray-500">Color from file: {row.color} - select matching material below</span>
+                  </div>
+                )}
+
                 <Select
                   id={`material-${row.id}`}
                   label="Material"
@@ -617,17 +769,20 @@ export default function NewQuotePage() {
         </Card>
 
         <Card title="Print Parameters">
-          <Input
-            id="print-hours"
-            label="Estimated Print Time (hours)"
-            type="number"
-            min="0"
-            step="0.01"
-            required
-            value={printHours}
-            onChange={(event) => setPrintHours(event.target.value)}
-            placeholder="e.g. 6.5"
-          />
+          <div className="space-y-2">
+            <Input
+              id="print-hours"
+              label="Estimated Print Time (hours)"
+              type="number"
+              min="0"
+              step="0.01"
+              required
+              value={printHours}
+              onChange={handlePrintHoursChange}
+              placeholder="e.g. 6.5"
+            />
+            {printHoursAutoFilled && <p className="text-xs text-indigo-600">Auto-filled from uploaded files</p>}
+          </div>
         </Card>
 
         <Card title="Extra Costs">

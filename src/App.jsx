@@ -15,6 +15,7 @@ import QuoteHistoryPage from './pages/quotes/QuoteHistoryPage';
 import SettingsLayout from './pages/settings/SettingsLayout';
 import CompanyProfilePage from './pages/settings/CompanyProfilePage';
 import EnergyConfigPage from './pages/settings/EnergyConfigPage';
+import PrintersPage from './pages/settings/PrintersPage';
 import MaterialsPage from './pages/settings/MaterialsPage';
 import TeamPage from './pages/settings/TeamPage';
 
@@ -41,6 +42,7 @@ function App() {
                     <Route index element={<Navigate to="/settings/profile" replace />} />
                     <Route path="profile" element={<CompanyProfilePage />} />
                     <Route path="energy" element={<EnergyConfigPage />} />
+                    <Route path="printers" element={<PrintersPage />} />
                     <Route path="materials" element={<MaterialsPage />} />
                     <Route path="team" element={<TeamPage />} />
                   </Route>

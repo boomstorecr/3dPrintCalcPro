@@ -1,5 +1,51 @@
-node_modules
-dist
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Environment variables
 .env
 .env.local
+.env.*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local Vite files
 *.local
+
+# Testing
+coverage/
+
+# Firebase
+.firebase/
+firebase-debug.log
+ui-debug.log
+firestore-debug.log
+pubsub-debug.log
+database-debug.log
+storage-debug.log
+
+# Misc
+*.tgz
+.cache/

@@ -128,11 +128,32 @@ function resolveMaterials(quoteData) {
     return {
       name: item?.name || item?.materialName || `Material ${index + 1}`,
       type: item?.type || item?.materialType || 'N/A',
+      color: item?.color || item?.colorHex || item?.hexColor || '',
       weight,
       costPerKg,
       subtotal,
     };
   });
+}
+
+function normalizeFileDataArray(quote) {
+  const fileDataArray = Array.isArray(quote.file_data)
+    ? quote.file_data
+    : quote.file_data
+      ? [quote.file_data]
+      : [];
+
+  return fileDataArray;
+}
+
+function resolveEstimatedGrams(fileData) {
+  const estimatedGrams = toNumber(fileData?.estimatedGrams);
+  if (estimatedGrams > 0) {
+    return estimatedGrams;
+  }
+
+  const volumeCm3 = toNumber(fileData?.volumeCm3);
+  return volumeCm3 > 0 ? volumeCm3 * 1.24 : 0;
 }
 
 function resolveBreakdown(quoteData) {
@@ -169,13 +190,26 @@ function resolveBreakdown(quoteData) {
 
 function resolvePrintInfo(quoteData) {
   const printHours = toNumber(quoteData?.print_hours ?? quoteData?.printHours ?? quoteData?.totalPrintHours);
+  const fileDataArray = normalizeFileDataArray(quoteData);
+  const normalizedFiles = fileDataArray.map((file, index) => ({
+    name: file?.fileName || file?.name || `File ${index + 1}`,
+    type: file?.fileType || file?.type || 'N/A',
+    estimatedGrams: resolveEstimatedGrams(file),
+    partCount: toNumber(file?.partCount),
+  }));
+  const partsFromFiles = normalizedFiles.reduce((sum, file) => sum + file.partCount, 0);
   const partCount = toNumber(
-    quoteData?.file_data?.partCount ?? quoteData?.importedModel?.partCount ?? quoteData?.partCount ?? quoteData?.partsCount
+    (partsFromFiles > 0 ? partsFromFiles : undefined) ??
+      quoteData?.file_data?.partCount ??
+      quoteData?.importedModel?.partCount ??
+      quoteData?.partCount ??
+      quoteData?.partsCount
   );
 
   return {
     printHours,
     partCount,
+    files: normalizedFiles,
   };
 }
 
@@ -246,13 +280,29 @@ export async function generateQuotePDF(quoteData, companyData) {
   doc.setFontSize(13);
   doc.text('Materials', marginX, cursorY);
 
+  const hasMaterialColor = materials.some((material) => String(material.color || '').trim());
+
   autoTable(doc, {
     startY: cursorY + 8,
-    head: [['Material', 'Weight (g)']],
-    body: materials.map((material) => [
-      material.name,
-      material.weight.toFixed(2),
-    ]),
+    head: [
+      hasMaterialColor
+        ? ['Material', 'Color', 'Weight (g)']
+        : ['Material', 'Weight (g)'],
+    ],
+    body: materials.map((material) => {
+      if (hasMaterialColor) {
+        return [
+          material.name,
+          String(material.color || '').trim() || 'N/A',
+          material.weight.toFixed(2),
+        ];
+      }
+
+      return [
+        material.name,
+        material.weight.toFixed(2),
+      ];
+    }),
     styles: {
       fontSize: 10,
       cellPadding: 6,
@@ -276,12 +326,48 @@ export async function generateQuotePDF(quoteData, companyData) {
   doc.setFontSize(12);
   doc.text('Print Info', marginX, cursorY);
 
+  const printerSnapshot = quoteData?.printer_snapshot;
+  if (printerSnapshot) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text('Printer', marginX, cursorY + 18);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const printerText = `${printerSnapshot.name}${printerSnapshot.brand ? ` (${printerSnapshot.brand})` : ''} - ${printerSnapshot.type || 'N/A'}, ${printerSnapshot.wattage || 0}W`;
+    doc.text(printerText, marginX, cursorY + 32);
+    cursorY += 22;
+  }
+
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
   doc.text(`Total print time (hours): ${printInfo.printHours.toFixed(2)}`, marginX, cursorY + 18);
   doc.text(`Number of parts: ${printInfo.partCount || 0}`, marginX, cursorY + 34);
+  let fileInfoCursorY = cursorY + 50;
+  if (printInfo.files.length === 1) {
+    const singleFile = printInfo.files[0];
+    doc.text(
+      `File: ${singleFile.name} (${singleFile.type}) - Filament: ${singleFile.estimatedGrams.toFixed(2)} g`,
+      marginX,
+      fileInfoCursorY
+    );
+    fileInfoCursorY += 16;
+  } else if (printInfo.files.length > 1) {
+    doc.setFont('helvetica', 'bold');
+    doc.text('Files', marginX, fileInfoCursorY);
+    fileInfoCursorY += 16;
 
-  cursorY += 56;
+    doc.setFont('helvetica', 'normal');
+    printInfo.files.forEach((file) => {
+      doc.text(
+        `- ${file.name} (${file.type}) | Filament: ${file.estimatedGrams.toFixed(2)} g`,
+        marginX,
+        fileInfoCursorY
+      );
+      fileInfoCursorY += 14;
+    });
+  }
+
+  cursorY = fileInfoCursorY + 6;
 
   if (designUrl) {
     doc.setTextColor(37, 99, 235);

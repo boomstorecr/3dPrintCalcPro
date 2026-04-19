@@ -107,6 +107,21 @@ function getPrintHours(quote) {
 }
 
 function getPartCount(quote) {
+  const fileDataArray = Array.isArray(quote?.file_data)
+    ? quote.file_data
+    : quote?.file_data
+      ? [quote.file_data]
+      : [];
+
+  const filePartsCount = fileDataArray.reduce(
+    (sum, file) => sum + toNumber(file?.partCount ?? file?.partsCount),
+    0
+  );
+
+  if (filePartsCount > 0) {
+    return filePartsCount;
+  }
+
   return toNumber(quote?.file_data?.partCount ?? quote?.importedModel?.partCount ?? quote?.partCount ?? quote?.partsCount);
 }
 
@@ -122,6 +137,7 @@ function getMaterials(quote) {
     return {
       name: material?.materialName || material?.name || `Material ${index + 1}`,
       type: material?.type || material?.materialType || 'N/A',
+      color: material?.color || '',
       weight,
       costPerKg,
       subtotal,
@@ -261,6 +277,34 @@ export default function QuotePreviewPage() {
   const breakdown = useMemo(() => getBreakdown(quote), [quote]);
   const printHours = useMemo(() => getPrintHours(quote), [quote]);
   const partCount = useMemo(() => getPartCount(quote), [quote]);
+  const fileDataArray = useMemo(
+    () =>
+      Array.isArray(quote?.file_data)
+        ? quote.file_data
+        : quote?.file_data
+          ? [quote.file_data]
+          : [],
+    [quote]
+  );
+
+  const normalizedFileData = useMemo(
+    () =>
+      fileDataArray.map((file, index) => {
+        const volumeCm3 = toNumber(file?.volumeCm3 ?? file?.volume_cm3);
+        const estimatedGrams =
+          toNumber(file?.estimatedGrams ?? file?.estimated_grams) || (volumeCm3 > 0 ? volumeCm3 * 1.24 : 0);
+
+        return {
+          name: file?.name || file?.fileName || file?.filename || `File ${index + 1}`,
+          type: file?.type || file?.fileType || file?.extension || 'N/A',
+          estimatedGrams,
+          estimatedHours: toNumber(
+            file?.estimatedHours ?? file?.estimated_hours ?? file?.printHours ?? file?.print_hours
+          ),
+        };
+      }),
+    [fileDataArray]
+  );
 
   const handleStatusChange = async (event) => {
     const nextStatus = event.target.value;
@@ -493,7 +537,19 @@ export default function QuotePreviewPage() {
                   {materials.length > 0 ? (
                     materials.map((material, index) => (
                       <tr key={`${material.name}-${index}`}>
-                        <td className="px-4 py-3">{material.name}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            {material.color ? (
+                              <span
+                                className="h-4 w-4 rounded-full border border-gray-300"
+                                style={{ backgroundColor: material.color }}
+                                aria-label={`${material.name} color`}
+                                title={material.color}
+                              />
+                            ) : null}
+                            <span>{material.name}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3">{material.type}</td>
                         <td className="px-4 py-3">{material.weight.toFixed(2)}</td>
                         <td className="px-4 py-3">{formatCurrency(material.costPerKg, currency)}</td>
@@ -519,6 +575,58 @@ export default function QuotePreviewPage() {
 
             <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <h3 className="text-base font-semibold text-gray-900">Print Details</h3>
+              {quote?.printer_snapshot && (
+                <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 sm:grid-cols-4">
+                  <p>
+                    <span className="font-medium text-gray-900">Printer:</span> {quote.printer_snapshot.name}
+                  </p>
+                  {quote.printer_snapshot.brand && (
+                    <p>
+                      <span className="font-medium text-gray-900">Brand:</span> {quote.printer_snapshot.brand}
+                    </p>
+                  )}
+                  <p>
+                    <span className="font-medium text-gray-900">Type:</span> {quote.printer_snapshot.type || 'N/A'}
+                  </p>
+                  <p>
+                    <span className="font-medium text-gray-900">Wattage:</span> {quote.printer_snapshot.wattage || 0}W
+                  </p>
+                </div>
+              )}
+              {normalizedFileData.length === 1 ? (
+                <div className="text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">Imported File:</span>{' '}
+                  <span>{normalizedFileData[0].name}</span>{' '}
+                  <Badge variant="neutral" className="align-middle">
+                    {normalizedFileData[0].type}
+                  </Badge>{' '}
+                  <span>{normalizedFileData[0].estimatedGrams.toFixed(2)} g</span>
+                  {normalizedFileData[0].estimatedHours > 0 ? (
+                    <span>{` • ${normalizedFileData[0].estimatedHours.toFixed(2)} h`}</span>
+                  ) : null}
+                </div>
+              ) : normalizedFileData.length > 1 ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-900">Imported Files</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {normalizedFileData.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="space-y-1 rounded-md border border-gray-200 bg-white p-3 text-sm text-gray-700"
+                      >
+                        <p className="truncate font-medium text-gray-900" title={file.name}>
+                          {file.name}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant="neutral">{file.type}</Badge>
+                          <span>{file.estimatedGrams.toFixed(2)} g</span>
+                          {file.estimatedHours > 0 ? <span>{file.estimatedHours.toFixed(2)} h</span> : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <p className="text-sm text-gray-700">
                 <span className="font-medium text-gray-900">Estimated Print Time:</span>{' '}
                 {printHours > 0 ? `${printHours.toFixed(2)} h` : 'N/A'}

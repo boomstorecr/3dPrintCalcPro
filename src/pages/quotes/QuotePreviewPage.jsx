@@ -13,6 +13,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { generateQuoteDocx } from '../../lib/docxGenerator';
 import { db } from '../../lib/firebase';
+import { getOrderByQuoteId, createOrderFromQuote } from '../../lib/orders';
 import { generateQuotePDF } from '../../lib/pdfGenerator';
 import { deleteQuote, getQuote, updateQuote } from '../../lib/quotes';
 
@@ -202,6 +203,7 @@ export default function QuotePreviewPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingDocx, setGeneratingDocx] = useState(false);
+  const [creatingOrder, setCreatingOrder] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
@@ -346,6 +348,31 @@ export default function QuotePreviewPage() {
     }
   };
 
+  const handleCreateOrder = async () => {
+    if (!quote || !userProfile?.company_id) return;
+
+    setCreatingOrder(true);
+    try {
+      // Check if order already exists for this quote
+      const existingOrder = await getOrderByQuoteId(quote.id, userProfile.company_id);
+      if (existingOrder) {
+        info('An order already exists for this quote.');
+        navigate('/orders/' + existingOrder.id);
+        return;
+      }
+
+      // Create new order
+      const orderId = await createOrderFromQuote(quote, userProfile.company_id, company || {});
+      success('Order created successfully!');
+      navigate('/orders/' + orderId);
+    } catch (createError) {
+      console.error('[QuotePreviewPage] Failed to create order', createError);
+      error('Failed to create order.');
+    } finally {
+      setCreatingOrder(false);
+    }
+  };
+
   const handleDownloadDocx = async () => {
     if (!quote) {
       return;
@@ -427,6 +454,16 @@ export default function QuotePreviewPage() {
               className="min-w-[180px]"
               disabled={updatingStatus}
             />
+
+            {String(quote.status || '').toLowerCase() === 'accepted' && (
+              <Button
+                onClick={handleCreateOrder}
+                loading={creatingOrder}
+                disabled={generatingPdf || generatingDocx || deleting}
+              >
+                Create Order
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

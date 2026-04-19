@@ -12,6 +12,9 @@ import DashboardPage from './pages/DashboardPage';
 import NewQuotePage from './pages/quotes/NewQuotePage';
 import QuotePreviewPage from './pages/quotes/QuotePreviewPage';
 import QuoteHistoryPage from './pages/quotes/QuoteHistoryPage';
+import OrdersListPage from './pages/orders/OrdersListPage';
+import OrderDetailPage from './pages/orders/OrderDetailPage';
+import PublicOrderPage from './pages/orders/PublicOrderPage';
 import SettingsLayout from './pages/settings/SettingsLayout';
 import CompanyProfilePage from './pages/settings/CompanyProfilePage';
 import EnergyConfigPage from './pages/settings/EnergyConfigPage';
@@ -36,6 +39,8 @@ function App() {
                 <Route path="/quotes/new" element={<NewQuotePage />} />
                 <Route path="/quotes/:id" element={<QuotePreviewPage />} />
                 <Route path="/quotes" element={<QuoteHistoryPage />} />
+                <Route path="/orders" element={<OrdersListPage />} />
+                <Route path="/orders/:id" element={<OrderDetailPage />} />
 
                 <Route element={<AdminRoute />}>
                   <Route path="/settings" element={<SettingsLayout />}>
@@ -50,6 +55,7 @@ function App() {
               </Route>
             </Route>
 
+            <Route path="/order/track/:token" element={<PublicOrderPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </BrowserRouter>

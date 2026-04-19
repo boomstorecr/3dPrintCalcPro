@@ -32,6 +32,8 @@ SaaS platform for 3D printing entrepreneurs to calculate production costs, manag
 7. Quote history with filtering, duplication, and status tracking
 8. Team management with invite codes
 9. Material catalog management (PLA, PETG, TPU, etc.)
+10. Order management with per-piece status tracking (Pending / In Progress / Completed)
+11. Public order tracking page — shareable link for clients, no login required
 
 ## Pricing Formula
 
@@ -98,7 +100,7 @@ src/
 ├── hooks/          # useAuth, useToast
 ├── layouts/        # AuthLayout, DashboardLayout
 ├── lib/            # Firebase, parsers, pricing engine, CRUD, exporters
-└── pages/          # Dashboard, Quotes (new/preview/history), Settings, Auth
+└── pages/          # Dashboard, Quotes, Orders (list/detail/public tracking), Settings, Auth
 ```
 
 ## Routes
@@ -107,6 +109,9 @@ src/
 - `/quotes/new` — Create/edit quote
 - `/quotes/:id` — Preview and export
 - `/quotes` — Quote history
+- `/orders` — Order list
+- `/orders/:id` — Order detail and piece management
+- `/order/track/:token` — Public order tracking (no auth)
 - `/settings/profile` — Company profile
 - `/settings/electricity` — kWh cost
 - `/settings/printers` — Printer management

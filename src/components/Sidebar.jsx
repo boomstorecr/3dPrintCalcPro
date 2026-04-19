@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Plus, List, Settings, LogOut } from 'lucide-react';
+import { Home, Plus, List, Package, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Sidebar({ isOpen, setIsOpen }) {
@@ -10,6 +10,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     { name: 'Dashboard', href: '/', icon: Home },
     { name: 'New Quote', href: '/quotes/new', icon: Plus },
     { name: 'Quote History', href: '/quotes', icon: List },
+    { name: 'Orders', href: '/orders', icon: Package },
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 

@@ -9,6 +9,8 @@ import { Table } from '../../components/ui/Table';
 import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency } from '../../lib/currency';
 import { db } from '../../lib/firebase';
 
 const MATERIAL_TYPE_OPTIONS = [
@@ -30,8 +32,9 @@ const EMPTY_FORM = {
 };
 
 export default function MaterialsPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, companyCurrency } = useAuth();
   const { success, error } = useToast();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -82,20 +85,20 @@ export default function MaterialsPage() {
     () => [
       {
         key: 'name',
-        label: 'Name',
+        label: t('settings.materials.name'),
       },
       {
         key: 'type',
-        label: 'Type',
+        label: t('settings.materials.type'),
       },
       {
         key: 'cost_per_kg',
-        label: 'Cost per kg',
-        render: (row) => Number(row.cost_per_kg ?? 0).toFixed(2),
+        label: t('settings.materials.costPerKg'),
+        render: (row) => formatCurrency(Number(row.cost_per_kg ?? 0), companyCurrency),
       },
       {
         key: 'actions',
-        label: 'Actions',
+        label: t('common.actions'),
         render: (row) => (
           <div className="flex gap-2">
             <Button
@@ -106,7 +109,7 @@ export default function MaterialsPage() {
                 handleOpenEditModal(row);
               }}
             >
-              Edit
+              {t('settings.materials.edit')}
             </Button>
             <Button
               size="sm"
@@ -116,13 +119,13 @@ export default function MaterialsPage() {
                 handleOpenDeleteModal(row);
               }}
             >
-              Delete
+              {t('settings.materials.delete')}
             </Button>
           </div>
         ),
       },
     ],
-    []
+    [companyCurrency, t]
   );
 
   const handleOpenAddModal = () => {
@@ -220,20 +223,20 @@ export default function MaterialsPage() {
       if (editingMaterial?.id) {
         const materialRef = doc(db, 'materials', editingMaterial.id);
         await updateDoc(materialRef, payload);
-        success('Material updated successfully.');
+        success(t('toast.materialSaved'));
       } else {
         await addDoc(collection(db, 'materials'), {
           ...payload,
           company_id: companyId,
         });
-        success('Material created successfully.');
+        success(t('toast.materialSaved'));
       }
 
       closeFormModal();
       await loadMaterials();
     } catch (saveError) {
       console.error('[MaterialsPage] Failed to save material', saveError);
-      error('Failed to save material.');
+      error(t('toast.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -254,12 +257,12 @@ export default function MaterialsPage() {
 
     try {
       await deleteDoc(doc(db, 'materials', pendingDeleteMaterial.id));
-      success('Material deleted successfully.');
+      success(t('toast.materialDeleted'));
       closeDeleteModal();
       await loadMaterials();
     } catch (deleteError) {
       console.error('[MaterialsPage] Failed to delete material', deleteError);
-      error('Failed to delete material.');
+      error(t('toast.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -267,7 +270,7 @@ export default function MaterialsPage() {
 
   if (!isAdmin) {
     return (
-      <Card title="Materials">
+      <Card title={t('settings.materials.title')}>
         <p className="text-sm text-gray-600">Only administrators can manage material settings.</p>
       </Card>
     );
@@ -275,16 +278,20 @@ export default function MaterialsPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Materials">
+      <Card title={t('settings.materials.title')}>
         <div className="mb-4 flex items-center justify-between">
           <p className="text-sm text-gray-600">Manage material pricing for quote calculations.</p>
-          <Button onClick={handleOpenAddModal}>Add Material</Button>
+          <Button onClick={handleOpenAddModal}>{t('settings.materials.add')}</Button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-10">
             <Spinner size="lg" />
           </div>
+        ) : materials.length === 0 ? (
+          <p className="text-sm text-gray-600">
+            {t('settings.materials.noMaterials')}. {t('settings.materials.noMaterialsSubtitle')}
+          </p>
         ) : (
           <Table columns={columns} data={materials} />
         )}
@@ -293,12 +300,12 @@ export default function MaterialsPage() {
       <Modal
         isOpen={isFormModalOpen}
         onClose={closeFormModal}
-        title={editingMaterial ? 'Edit Material' : 'Add Material'}
+        title={editingMaterial ? t('settings.materials.edit') : t('settings.materials.add')}
       >
         <div className="space-y-4">
           <Input
             id="material-name"
-            label="Name"
+            label={t('settings.materials.name')}
             value={formValues.name}
             onChange={handleInputChange('name')}
             placeholder="e.g. PLA Premium"
@@ -306,7 +313,7 @@ export default function MaterialsPage() {
 
           <Select
             id="material-type"
-            label="Type"
+            label={t('settings.materials.type')}
             value={formValues.type}
             onChange={handleInputChange('type')}
             options={MATERIAL_TYPE_OPTIONS}
@@ -314,7 +321,7 @@ export default function MaterialsPage() {
 
           <Input
             id="material-cost"
-            label="Cost per kg"
+            label={t('settings.materials.costPerKg')}
             type="number"
             min="0"
             step="0.01"
@@ -324,7 +331,7 @@ export default function MaterialsPage() {
 
           <Input
             id="material-density"
-            label="Density (g/cm3)"
+            label={t('settings.materials.density')}
             type="number"
             min="0"
             step="0.0001"
@@ -334,26 +341,26 @@ export default function MaterialsPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={closeFormModal} disabled={saving}>
-              Cancel
+              {t('settings.materials.cancel')}
             </Button>
             <Button onClick={handleSaveMaterial} loading={saving}>
-              {editingMaterial ? 'Update Material' : 'Create Material'}
+              {saving ? t('settings.materials.saving') : t('settings.materials.save')}
             </Button>
           </div>
         </div>
       </Modal>
 
-      <Modal isOpen={isDeleteModalOpen} onClose={closeDeleteModal} title="Delete Material">
+      <Modal isOpen={isDeleteModalOpen} onClose={closeDeleteModal} title={t('settings.materials.delete')}>
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
-            Are you sure you want to delete {pendingDeleteMaterial?.name || 'this material'}?
+            {t('settings.materials.deleteConfirm')} {pendingDeleteMaterial?.name || t('settings.materials.name')}?
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={closeDeleteModal} disabled={saving}>
-              Cancel
+              {t('settings.materials.cancel')}
             </Button>
             <Button variant="danger" onClick={handleDeleteMaterial} loading={saving}>
-              Delete
+              {saving ? t('settings.materials.saving') : t('settings.materials.delete')}
             </Button>
           </div>
         </div>

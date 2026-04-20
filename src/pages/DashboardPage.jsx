@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
+import { formatCurrency } from '../lib/currency';
 import { db } from '../lib/firebase';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -9,8 +11,15 @@ import { Badge } from '../components/ui/Badge';
 import { Table } from '../components/ui/Table';
 import { Spinner } from '../components/ui/Spinner';
 
+function normalizeStatusKey(status) {
+  return String(status || 'draft')
+    .toLowerCase()
+    .replace(/_([a-z])/g, (_, char) => char.toUpperCase());
+}
+
 export default function DashboardPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, companyCurrency } = useAuth();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(true);
@@ -118,7 +127,7 @@ export default function DashboardPage() {
     );
   }
 
-  const currentDate = new Date().toLocaleDateString('en-US', {
+  const currentDate = new Date().toLocaleDateString(i18n.language || undefined, {
     weekday: 'long',
     year: 'numeric',
     month: 'long', 
@@ -142,7 +151,7 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold text-gray-900">
-              Welcome back, {userProfile.display_name}
+              {t('dashboard.welcome', { name: userProfile?.display_name || '...' })}
             </h1>
             <Badge color={userProfile.role === 'admin' ? 'purple' : 'gray'}>
               {userProfile.role?.charAt(0).toUpperCase() + userProfile.role?.slice(1)}
@@ -154,14 +163,14 @@ export default function DashboardPage() {
         {/* 4. Quick Actions */}
         <div className="flex items-center gap-2">
           <Button onClick={() => navigate('/quotes/new')} variant="primary">
-            New Quote
+            {t('dashboard.createNewQuote')}
           </Button>
           <Button onClick={() => navigate('/settings/materials')} variant="secondary">
-            Materials
+            {t('dashboard.manageMaterials')}
           </Button>
           {userProfile.role === 'admin' && (
             <Button onClick={() => navigate('/settings')} variant="secondary">
-              Settings
+              {t('dashboard.companySettings')}
             </Button>
           )}
         </div>
@@ -170,40 +179,40 @@ export default function DashboardPage() {
       {/* 2. Quick Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-5">
-          <div className="text-sm font-medium text-gray-500 mb-1">Total Quotes</div>
+          <div className="text-sm font-medium text-gray-500 mb-1">{t('dashboard.totalQuotes')}</div>
           <div className="text-3xl font-bold text-gray-900">{stats.totalQuotes}</div>
-          <div className="text-xs text-gray-400 mt-1">Across all time</div>
+          <div className="text-xs text-gray-400 mt-1">{t('dashboard.acrossAllTime')}</div>
         </Card>
         
         <Card className="p-5">
-          <div className="text-sm font-medium text-gray-500 mb-1">This Month</div>
+          <div className="text-sm font-medium text-gray-500 mb-1">{t('dashboard.thisMonth')}</div>
           <div className="text-3xl font-bold text-gray-900">{stats.thisMonth}</div>
-          <div className="text-xs text-gray-400 mt-1">Quotes created this month</div>
+          <div className="text-xs text-gray-400 mt-1">{t('dashboard.quotesThisMonth')}</div>
         </Card>
         
         <Card className="p-5">
-          <div className="text-sm font-medium text-gray-500 mb-1">Total Revenue</div>
+          <div className="text-sm font-medium text-gray-500 mb-1">{t('dashboard.totalRevenue')}</div>
           <div className="text-3xl font-bold text-gray-900">
-            ${stats.totalRevenue.toFixed(2)}
+            {formatCurrency(stats.totalRevenue, companyCurrency)}
           </div>
-          <div className="text-xs text-gray-400 mt-1">From accepted quotes</div>
+          <div className="text-xs text-gray-400 mt-1">{t('dashboard.fromAccepted')}</div>
         </Card>
         
         <Card className="p-5">
-          <div className="text-sm font-medium text-gray-500 mb-1">Average Quote</div>
+          <div className="text-sm font-medium text-gray-500 mb-1">{t('dashboard.averageQuote')}</div>
           <div className="text-3xl font-bold text-gray-900">
-            {stats.averageQuote > 0 ? `$${stats.averageQuote.toFixed(2)}` : 'N/A'}
+            {formatCurrency(stats.averageQuote, companyCurrency)}
           </div>
-          <div className="text-xs text-gray-400 mt-1">Revenue per accepted quote</div>
+          <div className="text-xs text-gray-400 mt-1">{t('dashboard.revenuePerAccepted')}</div>
         </Card>
       </div>
 
       {/* 3. Recent Quotes Table */}
       <Card className="overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">Recent Quotes</h2>
+          <h2 className="text-lg font-semibold text-gray-800">{t('dashboard.recentQuotes')}</h2>
           <Link to="/quotes" className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-            View All →
+            {t('dashboard.viewAll')}
           </Link>
         </div>
         
@@ -212,11 +221,11 @@ export default function DashboardPage() {
             <Table>
               <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 <tr>
-                  <th className="px-5 py-3">Client</th>
-                  <th className="px-5 py-3">Date</th>
-                  <th className="px-5 py-3">Total</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Actions</th>
+                  <th className="px-5 py-3">{t('common.client')}</th>
+                  <th className="px-5 py-3">{t('common.date')}</th>
+                  <th className="px-5 py-3">{t('common.total')}</th>
+                  <th className="px-5 py-3">{t('common.status')}</th>
+                  <th className="px-5 py-3 text-right">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -229,11 +238,11 @@ export default function DashboardPage() {
                       {quote.date?.toDate ? quote.date.toDate().toLocaleDateString() : 'Unknown'}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-900">
-                      ${quote.total_price?.toFixed(2) || '0.00'}
+                      {formatCurrency(quote.total_price || 0, companyCurrency)}
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap text-sm">
                       <Badge color={getStatusColor(quote.status)}>
-                        {quote.status ? quote.status.toUpperCase() : 'DRAFT'}
+                        {t(`status.${normalizeStatusKey(quote.status)}`)}
                       </Badge>
                     </td>
                     <td className="px-5 py-3 whitespace-nowrap text-sm text-right">
@@ -241,7 +250,7 @@ export default function DashboardPage() {
                         to={`/quotes/${quote.id}`}
                         className="text-blue-600 hover:text-blue-900 font-medium"
                       >
-                        View
+                        {t('common.view')}
                       </Link>
                     </td>
                   </tr>
@@ -250,7 +259,7 @@ export default function DashboardPage() {
             </Table>
           ) : (
             <div className="p-8 text-center text-gray-500">
-              No recent quotes found. Create your first quote to get started!
+              {t('dashboard.noQuotes')} {t('dashboard.createFirst')}
             </div>
           )}
         </div>

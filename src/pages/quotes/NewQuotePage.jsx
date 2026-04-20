@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
@@ -9,6 +10,7 @@ import FileImport from '../../components/FileImport';
 import CostBreakdown from '../../components/CostBreakdown';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { formatCurrency } from '../../lib/currency';
 import { getMaterials } from '../../lib/materials';
 import { getPrinters } from '../../lib/printers';
 import { calculateQuote } from '../../lib/pricingEngine';
@@ -37,7 +39,8 @@ function parseNumeric(value) {
 export default function NewQuotePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, companyCurrency, companyTaxRate } = useAuth();
+  const { t } = useTranslation();
   const { error, success } = useToast();
 
   const editQuoteId = searchParams.get('edit');
@@ -48,12 +51,16 @@ export default function NewQuotePage() {
 
   const [clientName, setClientName] = useState('');
   const [designUrl, setDesignUrl] = useState('');
+  const [estimatedDeliveryDays, setEstimatedDeliveryDays] = useState('');
   const [expirationDate, setExpirationDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 30);
     return d.toISOString().split('T')[0];
   });
   const [notes, setNotes] = useState('');
+  const [discountType, setDiscountType] = useState('percentage');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountNote, setDiscountNote] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
 
   const [importedFiles, setImportedFiles] = useState(null);
@@ -76,6 +83,7 @@ export default function NewQuotePage() {
     hourlyAmortizationFee: 0,
     profitMargin: 0,
     failureMargin: 0,
+    taxRate: parseNumeric(companyTaxRate),
     currency: 'USD',
   });
 
@@ -100,14 +108,14 @@ export default function NewQuotePage() {
         setMaterialsCatalog(rows);
       } catch (loadError) {
         console.error('[NewQuotePage] Failed to load materials', loadError);
-        error('Failed to load materials.');
+        error(t('toast.loadFailed'));
       } finally {
         setLoadingMaterials(false);
       }
     };
 
     loadMaterials();
-  }, [companyId, error]);
+  }, [companyId, error, t]);
 
   useEffect(() => {
     const loadPrinters = async () => {
@@ -124,14 +132,14 @@ export default function NewQuotePage() {
         setPrinters(rows);
       } catch (loadError) {
         console.error('[NewQuotePage] Failed to load printers', loadError);
-        error('Failed to load printers.');
+        error(t('toast.loadFailed'));
       } finally {
         setLoadingPrinters(false);
       }
     };
 
     loadPrinters();
-  }, [companyId, error]);
+  }, [companyId, error, t]);
 
   useEffect(() => {
     const loadCompanyConfig = async () => {
@@ -149,6 +157,7 @@ export default function NewQuotePage() {
         if (!companySnap.exists()) {
           setCompanyConfig((prev) => ({
             ...prev,
+            taxRate: parseNumeric(companyTaxRate),
             currency: 'USD',
           }));
           return;
@@ -163,18 +172,26 @@ export default function NewQuotePage() {
           hourlyAmortizationFee: 0,
           profitMargin: 0,
           failureMargin: 0,
+          taxRate: parseNumeric(companyTaxRate),
           currency: companyData.currency || globalConfig.currency || 'USD',
         });
       } catch (loadError) {
         console.error('[NewQuotePage] Failed to load company config', loadError);
-        error('Failed to load company configuration.');
+        error(t('toast.loadFailed'));
       } finally {
         setLoadingCompanyConfig(false);
       }
     };
 
     loadCompanyConfig();
-  }, [companyId, error]);
+  }, [companyId, companyTaxRate, error, t]);
+
+  useEffect(() => {
+    setCompanyConfig((prev) => ({
+      ...prev,
+      taxRate: parseNumeric(companyTaxRate),
+    }));
+  }, [companyTaxRate]);
 
   useEffect(() => {
     if (!selectedPrinterId) {
@@ -218,7 +235,7 @@ export default function NewQuotePage() {
         const quote = await getQuote(sourceQuoteId);
 
         if (!quote) {
-          error('Quote not found.');
+          error(t('common.noData'));
           return;
         }
 
@@ -279,6 +296,10 @@ export default function NewQuotePage() {
           setExpirationDate(expDate.toISOString().split('T')[0]);
         }
         setNotes(String(quote.notes || ''));
+        setDiscountType(quote.discount?.type || 'percentage');
+        setDiscountValue(quote.discount?.value?.toString() || quote.discount_percent?.toString() || '');
+        setDiscountNote(quote.discount?.note || quote.discount_note || '');
+        setEstimatedDeliveryDays(quote.estimated_delivery_days?.toString() || '');
         setPhotoFile(null);
         setCurrentPhotoUrl(isEditMode ? String(quote.photo_url || '') : '');
         setMaterialRows(mappedMaterialRows);
@@ -313,7 +334,7 @@ export default function NewQuotePage() {
         }
       } catch (loadError) {
         console.error('[NewQuotePage] Failed to load source quote', loadError);
-        error('Failed to load quote data.');
+        error(t('toast.loadFailed'));
       } finally {
         if (!cancelled) {
           setLoadingQuote(false);
@@ -326,7 +347,7 @@ export default function NewQuotePage() {
     return () => {
       cancelled = true;
     };
-  }, [companyId, duplicateQuoteId, editQuoteId, error, isEditMode, navigate]);
+  }, [companyId, duplicateQuoteId, editQuoteId, error, isEditMode, navigate, t]);
 
   const materialOptions = useMemo(
     () =>
@@ -369,6 +390,10 @@ export default function NewQuotePage() {
     const quote = calculateQuote({
       materials: pricedMaterials,
       printHours: parseNumeric(printHours),
+      discount: {
+        type: discountType,
+        value: parseFloat(discountValue) || 0,
+      },
       companyConfig,
       extraCosts,
     });
@@ -377,7 +402,7 @@ export default function NewQuotePage() {
       ...quote,
       profitMarginPercent: parseNumeric(companyConfig.profitMargin) * 100,
     });
-  }, [materialRows, materialsCatalog, printHours, extraCostRows, companyConfig]);
+  }, [materialRows, materialsCatalog, printHours, discountType, discountValue, extraCostRows, companyConfig]);
 
   const handleFileResult = (aggregated) => {
     setImportedFiles(aggregated);
@@ -464,12 +489,12 @@ export default function NewQuotePage() {
 
   const handleSaveDraft = async () => {
     if (!companyId || !user?.uid) {
-      error('Unable to save quote. Missing company or user context.');
+      error(t('toast.saveFailed'));
       return;
     }
 
     if (!clientName.trim()) {
-      error('Client name is required.');
+      error(t('validation.nameRequired'));
       return;
     }
 
@@ -510,6 +535,10 @@ export default function NewQuotePage() {
         costPerKg: line.costPerKg,
       })),
       printHours: parseNumeric(printHours),
+      discount: {
+        type: discountType,
+        value: parseFloat(discountValue) || 0,
+      },
       companyConfig,
       extraCosts,
     });
@@ -522,7 +551,13 @@ export default function NewQuotePage() {
       client_name: clientName.trim(),
       design_url: designUrl.trim(),
       expiration_date: expirationDate,
+      estimated_delivery_days: parseInt(estimatedDeliveryDays, 10) || 0,
       notes: notes.trim(),
+      discount: {
+        type: discountType,
+        value: parseFloat(discountValue) || 0,
+        note: discountNote.trim(),
+      },
       photo_url: isEditMode ? currentPhotoUrl : '',
       cost_breakdown: calculateResult,
       total_price: calculateResult.totalPrice,
@@ -569,11 +604,11 @@ export default function NewQuotePage() {
         await updateQuote(quoteId, { photo_url: photoUrl });
       }
 
-      success(isEditMode ? 'Quote updated successfully.' : 'Draft saved successfully.');
+      success(t('toast.quoteSaved'));
       navigate(`/quotes/${quoteId}`);
     } catch (saveError) {
       console.error('[NewQuotePage] Failed to save draft', saveError);
-      error('Failed to save quote draft.');
+      error(t('toast.saveFailed'));
     } finally {
       setSavingDraft(false);
     }
@@ -582,11 +617,11 @@ export default function NewQuotePage() {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
       <div className="space-y-6 xl:col-span-2">
-        <Card title="Client Information">
+        <Card title={t('quotes.new.quoteDetails')}>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Input
               id="client-name"
-              label="Client Name"
+              label={t('quotes.new.clientName')}
               value={clientName}
               onChange={(event) => setClientName(event.target.value)}
               placeholder="e.g. Acme Robotics"
@@ -597,7 +632,7 @@ export default function NewQuotePage() {
             <Input
               id="design-url"
               type="url"
-              label="Design URL"
+              label={t('quotes.new.designUrl')}
               value={designUrl}
               onChange={(event) => setDesignUrl(event.target.value)}
               placeholder="https://"
@@ -607,15 +642,25 @@ export default function NewQuotePage() {
             <Input
               id="expiration-date"
               type="date"
-              label="Expiration Date"
+              label={t('quotes.new.expirationDate')}
               value={expirationDate}
               onChange={(event) => setExpirationDate(event.target.value)}
               min={new Date().toISOString().split('T')[0]}
             />
 
+            <Input
+              id="estimated-delivery-days"
+              type="number"
+              label={t('quotes.new.estimatedDelivery')}
+              placeholder={t('quotes.new.estimatedDeliveryPlaceholder')}
+              value={estimatedDeliveryDays}
+              onChange={(event) => setEstimatedDeliveryDays(event.target.value)}
+              min="0"
+            />
+
             <div className="flex flex-col md:col-span-2">
               <label htmlFor="photo-upload" className="mb-1 text-sm font-medium text-gray-700">
-                Photo Upload
+                {t('quotes.new.photo')}
               </label>
               <input
                 id="photo-upload"
@@ -629,19 +674,19 @@ export default function NewQuotePage() {
           </div>
         </Card>
 
-        <Card title="3D File Import">
+        <Card title={t('quotes.new.fileSection')}>
           <FileImport onResult={handleFileResult} onClear={handleFileClear} />
         </Card>
 
-        <Card title="Printer Selection">
+        <Card title={t('quotes.new.printerConfig')}>
           <div className="space-y-3">
-            {loadingPrinters && <p className="text-sm text-gray-500">Loading printers...</p>}
+            {loadingPrinters && <p className="text-sm text-gray-500">{t('common.loading')}</p>}
 
             {!loadingPrinters && printers.length === 0 && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                No printers configured yet. Add printers in{' '}
+                {t('quotes.new.noPrinters')}{' '}
                 <Link to="/settings/printers" className="font-semibold underline">
-                  Printer Settings
+                  {t('settings.tabs.printers')}
                 </Link>
                 .
               </div>
@@ -651,14 +696,14 @@ export default function NewQuotePage() {
               <>
                 <Select
                   id="printer-select"
-                  label="Printer"
+                  label={t('quotes.new.selectPrinter')}
                   value={selectedPrinterId}
                   onChange={(event) => setSelectedPrinterId(event.target.value)}
                   options={printers.map((p) => ({
                     value: p.id,
                     label: `${p.name}${p.brand ? ` (${p.brand})` : ''}`,
                   }))}
-                  placeholder="Select a printer"
+                  placeholder={t('quotes.new.selectPrinter')}
                 />
 
                 {selectedPrinterId &&
@@ -671,16 +716,17 @@ export default function NewQuotePage() {
                     return (
                       <div className="grid grid-cols-2 gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 sm:grid-cols-4">
                         <div>
-                          <span className="font-medium text-gray-900">Type:</span> {printer.type || 'N/A'}
+                          <span className="font-medium text-gray-900">{t('common.type')}:</span> {printer.type || 'N/A'}
                         </div>
                         <div>
-                          <span className="font-medium text-gray-900">Wattage:</span> {printer.wattage || 0}W
+                          <span className="font-medium text-gray-900">{t('quotes.new.wattage')}:</span> {printer.wattage || 0}W
                         </div>
                         <div>
-                          <span className="font-medium text-gray-900">Hourly Fee:</span> ${parseNumeric(printer.hourly_amortization_fee).toFixed(2)}/hr
+                          <span className="font-medium text-gray-900">{t('quotes.new.hourlyFee')}:</span>{' '}
+                          {formatCurrency(parseNumeric(printer.hourly_amortization_fee), companyCurrency || companyConfig.currency)}/hr
                         </div>
                         <div>
-                          <span className="font-medium text-gray-900">Profit:</span>{' '}
+                          <span className="font-medium text-gray-900">{t('quotes.new.profitMargin')}:</span>{' '}
                           {(parseNumeric(printer.profit_margin) * 100).toFixed(1)}%
                         </div>
                       </div>
@@ -691,15 +737,15 @@ export default function NewQuotePage() {
           </div>
         </Card>
 
-        <Card title="Material Assignment">
+        <Card title={t('quotes.new.materials')}>
           <div className="space-y-4">
-            {loadingMaterials && <p className="text-sm text-gray-500">Loading materials...</p>}
+            {loadingMaterials && <p className="text-sm text-gray-500">{t('common.loading')}</p>}
 
             {!loadingMaterials && materialsCatalog.length === 0 && (
               <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                No materials configured yet. Configure them in{' '}
+                {t('quotes.new.noMaterials')}{' '}
                 <Link to="/settings/materials" className="font-semibold underline">
-                  Materials Settings
+                  {t('settings.tabs.materials')}
                 </Link>
                 .
               </div>
@@ -713,24 +759,24 @@ export default function NewQuotePage() {
                       className="inline-block h-4 w-4 rounded-full border border-gray-300"
                       style={{ backgroundColor: row.color }}
                     />
-                    <span className="text-xs text-gray-500">Color from file: {row.color} - select matching material below</span>
+                    <span className="text-xs text-gray-500">{t('quotes.new.autoFilled')}: {row.color}</span>
                   </div>
                 )}
 
                 <Select
                   id={`material-${row.id}`}
-                  label="Material"
+                  label={t('quotes.new.materialName')}
                   value={row.materialId}
                   onChange={(event) => handleMaterialRowChange(row.id, 'materialId', event.target.value)}
                   options={materialOptions}
-                  placeholder="Select material"
+                  placeholder={t('quotes.new.selectMaterial')}
                   className="md:col-span-6"
                   disabled={materialsCatalog.length === 0}
                 />
 
                 <Input
                   id={`material-grams-${row.id}`}
-                  label="Weight (g)"
+                  label={t('quotes.new.grams')}
                   type="number"
                   min="0"
                   step="0.01"
@@ -747,7 +793,7 @@ export default function NewQuotePage() {
                     onClick={() => handleRemoveMaterialRow(row.id)}
                     disabled={materialRows.length === 1}
                   >
-                    Remove
+                    {t('common.delete')}
                   </Button>
                 </div>
 
@@ -759,7 +805,7 @@ export default function NewQuotePage() {
                       onClick={handleAddMaterialRow}
                       disabled={materialsCatalog.length === 0}
                     >
-                      Add Material
+                      {t('quotes.new.addMaterial')}
                     </Button>
                   </div>
                 )}
@@ -768,11 +814,11 @@ export default function NewQuotePage() {
           </div>
         </Card>
 
-        <Card title="Print Parameters">
+        <Card title={t('quotes.new.printHours')}>
           <div className="space-y-2">
             <Input
               id="print-hours"
-              label="Estimated Print Time (hours)"
+              label={t('quotes.new.printHours')}
               type="number"
               min="0"
               step="0.01"
@@ -781,17 +827,17 @@ export default function NewQuotePage() {
               onChange={handlePrintHoursChange}
               placeholder="e.g. 6.5"
             />
-            {printHoursAutoFilled && <p className="text-xs text-indigo-600">Auto-filled from uploaded files</p>}
+            {printHoursAutoFilled && <p className="text-xs text-indigo-600">{t('quotes.new.autoFilled')}</p>}
           </div>
         </Card>
 
-        <Card title="Extra Costs">
+        <Card title={t('quotes.new.extraCosts')}>
           <div className="space-y-4">
             {extraCostRows.map((row, index) => (
               <div key={row.id} className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-4 md:grid-cols-12">
                 <Input
                   id={`extra-name-${row.id}`}
-                  label="Name"
+                  label={t('quotes.new.extraName')}
                   value={row.name}
                   onChange={(event) => handleExtraCostChange(row.id, 'name', event.target.value)}
                   placeholder="e.g. Post-processing"
@@ -800,7 +846,7 @@ export default function NewQuotePage() {
 
                 <Input
                   id={`extra-amount-${row.id}`}
-                  label="Amount"
+                  label={t('quotes.new.extraAmount')}
                   type="number"
                   min="0"
                   step="0.01"
@@ -817,28 +863,64 @@ export default function NewQuotePage() {
                     onClick={() => handleRemoveExtraCost(row.id)}
                     disabled={extraCostRows.length === 1}
                   >
-                    Remove
+                    {t('common.delete')}
                   </Button>
                 </div>
 
                 {index === extraCostRows.length - 1 && (
                   <div className="md:col-span-12">
                     <Button type="button" variant="secondary" onClick={handleAddExtraCost}>
-                      Add Extra Cost
+                      {t('quotes.new.addExtra')}
                     </Button>
                   </div>
                 )}
               </div>
             ))}
+
+            <div className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-4 md:grid-cols-3">
+              <Select
+                id="discount-type"
+                name="discountType"
+                label={t('quotes.new.discountType')}
+                value={discountType}
+                onChange={(event) => setDiscountType(event.target.value)}
+                options={[
+                  { value: 'percentage', label: t('quotes.new.discountTypePercentage') },
+                  { value: 'fixed', label: t('quotes.new.discountTypeFixed') },
+                ]}
+              />
+
+              <Input
+                id="discount-value"
+                name="discountValue"
+                type="number"
+                label={t('quotes.new.discount')}
+                value={discountValue}
+                onChange={(event) => setDiscountValue(event.target.value)}
+                min="0"
+                max={discountType === 'percentage' ? '100' : undefined}
+                step="0.01"
+              />
+
+              <Input
+                id="discount-note"
+                name="discountNote"
+                type="text"
+                label={t('quotes.new.discountNote')}
+                placeholder={t('quotes.new.discountNotePlaceholder')}
+                value={discountNote}
+                onChange={(event) => setDiscountNote(event.target.value)}
+              />
+            </div>
           </div>
         </Card>
 
-        <Card title="Notes">
+        <Card title={t('quotes.new.notes')}>
           <textarea
             id="quote-notes"
             rows={4}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            placeholder="Additional notes for the client..."
+            placeholder={t('quotes.new.notes')}
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
           />
@@ -846,10 +928,10 @@ export default function NewQuotePage() {
 
         <div className="flex flex-wrap justify-end gap-3">
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="button" onClick={handleSaveDraft} disabled={savingDraft || loadingQuote}>
-            {isEditMode ? 'Update Quote' : 'Save Draft'}
+            {savingDraft ? t('quotes.new.saving') : isEditMode ? t('quotes.new.saveQuote') : t('quotes.new.saveDraft')}
           </Button>
         </div>
       </div>
@@ -857,8 +939,8 @@ export default function NewQuotePage() {
       <div className="xl:col-span-1">
         <div className="sticky top-6 space-y-4">
           {loadingCompanyConfig && (
-            <Card title="Live Cost Breakdown">
-              <p className="text-sm text-gray-500">Loading company pricing config...</p>
+            <Card title={t('quotes.new.costBreakdown')}>
+              <p className="text-sm text-gray-500">{t('common.loading')}</p>
             </Card>
           )}
           {!loadingCompanyConfig && <CostBreakdown breakdown={breakdown} currency={companyConfig.currency} />}

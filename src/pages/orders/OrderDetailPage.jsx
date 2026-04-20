@@ -12,12 +12,15 @@ import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { db } from '../../lib/firebase';
 import { getOrder, updatePieceStatus, updatePieceNotes, deleteOrder } from '../../lib/orders';
+import { useTranslation } from 'react-i18next';
 
-const PIECE_STATUS_OPTIONS = [
-  { label: 'Pending', value: 'pending' },
-  { label: 'In Progress', value: 'in_progress' },
-  { label: 'Completed', value: 'completed' },
-];
+function getPieceStatusOptions(t) {
+  return [
+    { label: t('orders.detail.markPending'), value: 'pending' },
+    { label: t('orders.detail.markInProgress'), value: 'in_progress' },
+    { label: t('orders.detail.markCompleted'), value: 'completed' },
+  ];
+}
 
 const STATUS_BADGE_VARIANT = {
   pending: 'neutral',
@@ -25,8 +28,13 @@ const STATUS_BADGE_VARIANT = {
   completed: 'success',
 };
 
-function statusLabel(status) {
-  const labels = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed' };
+function statusLabel(status, t) {
+  const labels = {
+    pending: t('orders.detail.pending'),
+    in_progress: t('orders.detail.inProgress'),
+    completed: t('orders.detail.completed'),
+  };
+
   return labels[status] || status;
 }
 
@@ -88,6 +96,7 @@ export default function OrderDetailPage() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const { success, error, info } = useToast();
+  const { t } = useTranslation();
 
   const [order, setOrder] = useState(null);
   const [company, setCompany] = useState(null);
@@ -128,7 +137,7 @@ export default function OrderDetailPage() {
         const orderData = await getOrder(id);
 
         if (!orderData) {
-          info('Order not found.');
+          info(t('toast.loadFailed'));
           if (!cancelled) {
             setOrder(null);
             setCompany(null);
@@ -160,7 +169,7 @@ export default function OrderDetailPage() {
       } catch (loadError) {
         console.error('[OrderDetailPage] Failed to load order details', loadError);
         if (!cancelled) {
-          error('Failed to load order details.');
+          error(t('toast.loadFailed'));
         }
       } finally {
         if (!cancelled) {
@@ -202,11 +211,11 @@ export default function OrderDetailPage() {
 
     try {
       await updatePieceStatus(order.id, pieceId, newStatus);
-      success('Piece status updated.');
+      success(t('toast.orderUpdated'));
     } catch (updateError) {
       console.error('[OrderDetailPage] Failed to update piece status', updateError);
       setOrder(originalOrder);
-      error('Failed to update piece status.');
+      error(t('toast.saveFailed'));
     } finally {
       setUpdatingPiece(null);
     }
@@ -244,10 +253,10 @@ export default function OrderDetailPage() {
         return next;
       });
 
-      success('Piece notes saved.');
+      success(t('toast.orderUpdated'));
     } catch (saveError) {
       console.error('[OrderDetailPage] Failed to save piece notes', saveError);
-      error('Failed to save piece notes.');
+      error(t('toast.saveFailed'));
     } finally {
       setSavingNotes(null);
     }
@@ -261,10 +270,10 @@ export default function OrderDetailPage() {
     try {
       await navigator.clipboard.writeText(publicUrl);
       setCopied(true);
-      success('Public tracking link copied to clipboard!');
+      success(t('toast.linkCopied'));
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      error('Failed to copy link.');
+      error(t('toast.saveFailed'));
     }
   };
 
@@ -277,11 +286,11 @@ export default function OrderDetailPage() {
 
     try {
       await deleteOrder(order.id);
-      success('Order deleted successfully.');
+      success(t('toast.orderDeleted'));
       navigate('/orders');
     } catch (deleteError) {
       console.error('[OrderDetailPage] Failed to delete order', deleteError);
-      error('Failed to delete order.');
+      error(t('toast.saveFailed'));
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);
@@ -298,11 +307,11 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <Card title="Order Details">
+      <Card title={t('orders.detail.title')}>
         <div className="space-y-4">
           <p className="text-sm text-gray-600">Order not found.</p>
           <Link to="/orders">
-            <Button variant="secondary">Back to Orders</Button>
+            <Button variant="secondary">{t('orders.detail.back')}</Button>
           </Link>
         </div>
       </Card>
@@ -315,26 +324,26 @@ export default function OrderDetailPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/orders">
-              <Button variant="secondary">Back</Button>
+              <Button variant="secondary">{t('orders.detail.back')}</Button>
             </Link>
 
             <Badge variant={STATUS_BADGE_VARIANT[order.status] || 'neutral'}>
-              {statusLabel(order.status)}
+              {statusLabel(order.status, t)}
             </Badge>
 
             {order.quote_id ? (
               <Link to={`/quotes/${order.quote_id}`}>
-                <Button variant="secondary">View Quote</Button>
+                <Button variant="secondary">{t('orders.detail.viewQuote')}</Button>
               </Link>
             ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="secondary" onClick={handleCopyLink} disabled={!publicUrl}>
-              {copied ? 'Copied!' : 'Share'}
+              {copied ? t('orders.detail.copied') : t('orders.detail.share')}
             </Button>
             <Button variant="danger" onClick={() => setIsDeleteModalOpen(true)} disabled={deleting}>
-              Delete
+              {t('orders.detail.delete')}
             </Button>
           </div>
         </div>
@@ -354,27 +363,29 @@ export default function OrderDetailPage() {
 
               <div>
                 <h2 className="text-2xl font-semibold text-gray-900">{company?.name || 'Company'}</h2>
-                <p className="text-sm text-gray-500">Order Details</p>
+                <p className="text-sm text-gray-500">{t('orders.detail.title')}</p>
               </div>
             </div>
 
             <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
               <p>
-                <span className="font-medium text-gray-900">Client:</span> {order.client_name || 'Unnamed Client'}
+                <span className="font-medium text-gray-900">{t('orders.detail.client')}:</span>{' '}
+                {order.client_name || 'Unnamed Client'}
               </p>
               <p>
-                <span className="font-medium text-gray-900">Created:</span>{' '}
+                <span className="font-medium text-gray-900">{t('orders.detail.created')}:</span>{' '}
                 {formatDate(order.created_at || order.createdAt)}
               </p>
               <p>
-                <span className="font-medium text-gray-900">Overall Status:</span> {statusLabel(order.status)}
+                <span className="font-medium text-gray-900">{t('orders.detail.overallStatus')}:</span>{' '}
+                {statusLabel(order.status, t)}
               </p>
             </div>
           </div>
 
           <div className="space-y-3 rounded-md border border-gray-200 bg-gray-50 p-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-gray-900">Progress</h3>
+              <h3 className="text-base font-semibold text-gray-900">{t('orders.detail.progress')}</h3>
               <span className="text-sm text-gray-600">{order.completion_percent || 0}% complete</span>
             </div>
             <OrderProgressBar
@@ -383,16 +394,16 @@ export default function OrderDetailPage() {
               pieceCounts={pieceCounts}
             />
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-              <span>Total: {pieceCounts.total}</span>
-              <span>Completed: {pieceCounts.completed}</span>
-              <span>In Progress: {pieceCounts.inProgress}</span>
-              <span>Pending: {pieceCounts.pending}</span>
+              <span>{t('orders.detail.total')}: {pieceCounts.total}</span>
+              <span>{t('orders.detail.completed')}: {pieceCounts.completed}</span>
+              <span>{t('orders.detail.inProgress')}: {pieceCounts.inProgress}</span>
+              <span>{t('orders.detail.pending')}: {pieceCounts.pending}</span>
             </div>
           </div>
         </div>
       </Card>
 
-      <Card title="Order Pieces">
+      <Card title={t('orders.detail.pieces')}>
         <div className="space-y-4">
           {(order.pieces || []).length > 0 ? (
             (order.pieces || []).map((piece) => (
@@ -400,21 +411,21 @@ export default function OrderDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-gray-900">{piece.name}</span>
                   <Badge variant={STATUS_BADGE_VARIANT[piece.status] || 'neutral'}>
-                    {statusLabel(piece.status)}
+                    {statusLabel(piece.status, t)}
                   </Badge>
                 </div>
 
                 <Select
                   id={`piece-status-${piece.id}`}
-                  label="Status"
+                  label={t('orders.detail.pieceStatus')}
                   value={piece.status}
                   onChange={(e) => handlePieceStatusChange(piece.id, e.target.value)}
-                  options={PIECE_STATUS_OPTIONS}
+                  options={getPieceStatusOptions(t)}
                   disabled={updatingPiece === piece.id}
                 />
 
                 <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Notes</label>
+                  <label className="text-xs font-medium text-gray-600">{t('orders.detail.notes')}</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -426,7 +437,7 @@ export default function OrderDetailPage() {
                           [piece.id]: e.target.value,
                         }))
                       }
-                      placeholder="Add notes..."
+                      placeholder={t('orders.detail.notesPlaceholder')}
                     />
                     <Button
                       variant="secondary"
@@ -438,31 +449,32 @@ export default function OrderDetailPage() {
                       }
                       loading={savingNotes === piece.id}
                     >
-                      Save
+                      {t('orders.detail.save')}
                     </Button>
                   </div>
                 </div>
               </div>
             ))
           ) : (
-            <p className="text-sm text-gray-600">No pieces found for this order.</p>
+            <p className="text-sm text-gray-600">{t('orders.detail.noPieces')}</p>
           )}
         </div>
       </Card>
 
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Order">
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title={t('orders.detail.delete')}
+      >
         <div className="space-y-5">
-          <p className="text-sm text-gray-700">
-            Are you sure you want to delete this order for{' '}
-            <span className="font-semibold">{order.client_name || 'this client'}</span>? This action cannot be undone.
-          </p>
+          <p className="text-sm text-gray-700">{t('orders.detail.deleteConfirm')}</p>
 
           <div className="flex flex-wrap justify-end gap-3">
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)} disabled={deleting}>
-              Cancel
+              {t('orders.detail.cancel')}
             </Button>
             <Button variant="danger" onClick={handleDelete} loading={deleting}>
-              Delete Order
+              {t('orders.detail.delete')}
             </Button>
           </div>
         </div>

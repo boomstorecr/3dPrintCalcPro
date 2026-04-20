@@ -1,17 +1,19 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Home, Plus, List, Package, Settings, LogOut } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 export default function Sidebar({ isOpen, setIsOpen }) {
   const navigate = useNavigate();
   const { logout, userProfile } = useAuth();
+  const { t } = useTranslation();
 
   const navItems = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'New Quote', href: '/quotes/new', icon: Plus },
-    { name: 'Quote History', href: '/quotes', icon: List },
-    { name: 'Orders', href: '/orders', icon: Package },
-    { name: 'Settings', href: '/settings', icon: Settings },
+    { name: t('nav.dashboard'), href: '/', icon: Home },
+    { name: t('nav.newQuote'), href: '/quotes/new', icon: Plus },
+    { name: t('nav.quoteHistory'), href: '/quotes', icon: List },
+    { name: t('nav.orders'), href: '/orders', icon: Package },
+    { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];
 
   return (
@@ -32,7 +34,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
       >
         <div className="flex flex-shrink-0 items-center px-4">
           <span className="text-xl font-bold text-white tracking-tight leading-none bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-            3DPrintCalc Pro
+            {t('app.title')}
           </span>
         </div>
 
@@ -79,7 +81,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
                 className="flex text-xs font-medium text-slate-400 hover:text-white items-center gap-1 transition-colors outline-none text-left"
               >
                 <LogOut className="h-3 w-3" />
-                Logout
+                {t('nav.logout')}
               </button>
             </div>
           </div>

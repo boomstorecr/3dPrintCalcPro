@@ -1,11 +1,14 @@
 import { Outlet } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 export default function AuthLayout() {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
-          3DPrintCalc Pro
+          {t('app.title')}
         </h2>
       </div>
 

@@ -8,6 +8,8 @@ import { Modal } from '../../components/ui/Modal';
 import { Badge } from '../../components/ui/Badge';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useTranslation } from 'react-i18next';
+import { formatCurrency, getCurrencySymbol } from '../../lib/currency';
 import {
   getPrinters,
   createPrinter,
@@ -27,11 +29,6 @@ const EMPTY_FORM = {
   failure_margin_percent: '5',
 };
 
-const TYPE_OPTIONS = [
-  { label: 'FDM', value: 'FDM' },
-  { label: 'Resin', value: 'Resin' },
-];
-
 function formatPercent(decimalValue) {
   const number = Number(decimalValue ?? 0);
   if (Number.isNaN(number)) {
@@ -43,6 +40,10 @@ function formatPercent(decimalValue) {
 
 function getTypeBadgeVariant(type) {
   return type === 'Resin' ? 'info' : 'success';
+}
+
+function getTypeLabel(type, t) {
+  return type === 'Resin' ? t('settings.printers.resin') : t('settings.printers.fdm');
 }
 
 function arePresetAndFormEquivalent(preset, formValues) {
@@ -76,8 +77,9 @@ function arePresetAndFormEquivalent(preset, formValues) {
 }
 
 export default function PrintersPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, companyCurrency } = useAuth();
   const { success, error } = useToast();
+  const { t } = useTranslation();
 
   const companyId = userProfile?.company_id;
   const isAdmin = userProfile?.role === 'Admin';
@@ -95,6 +97,14 @@ export default function PrintersPage() {
   const [formMode, setFormMode] = useState('preset');
   const [selectedPresetIndex, setSelectedPresetIndex] = useState('');
   const [formValues, setFormValues] = useState(EMPTY_FORM);
+
+  const typeOptions = useMemo(
+    () => [
+      { label: t('settings.printers.fdm'), value: 'FDM' },
+      { label: t('settings.printers.resin'), value: 'Resin' },
+    ],
+    [t]
+  );
 
   const presetGroups = useMemo(() => {
     return PRINTER_PRESETS.reduce((accumulator, preset, presetIndex) => {
@@ -294,20 +304,20 @@ export default function PrintersPage() {
     try {
       if (editingPrinter?.id) {
         await updatePrinter(editingPrinter.id, payload);
-        success('Printer updated successfully.');
+        success(t('toast.printerSaved'));
       } else if (formMode === 'preset' && arePresetAndFormEquivalent(selectedPreset, formValues)) {
         await createPrinterFromPreset(companyId, selectedPreset);
-        success('Printer created successfully from preset.');
+        success(t('toast.printerSaved'));
       } else {
         await createPrinter(payload);
-        success('Printer created successfully.');
+        success(t('toast.printerSaved'));
       }
 
       closeFormModal();
       await loadPrinters();
     } catch (saveError) {
       console.error('[PrintersPage] Failed to save printer', saveError);
-      error('Failed to save printer.');
+      error(t('toast.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -328,12 +338,12 @@ export default function PrintersPage() {
 
     try {
       await deletePrinter(pendingDeletePrinter.id);
-      success('Printer deleted successfully.');
+      success(t('toast.printerDeleted'));
       closeDeleteModal();
       await loadPrinters();
     } catch (deleteError) {
       console.error('[PrintersPage] Failed to delete printer', deleteError);
-      error('Failed to delete printer.');
+      error(t('toast.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -341,7 +351,7 @@ export default function PrintersPage() {
 
   if (!isAdmin) {
     return (
-      <Card title="Printers">
+      <Card title={t('settings.printers.title')}>
         <p className="text-sm text-gray-600">Only administrators can manage printers. You have read-only access.</p>
       </Card>
     );
@@ -352,12 +362,12 @@ export default function PrintersPage() {
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Printers</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{t('settings.printers.title')}</h2>
             <p className="mt-1 text-sm text-gray-600">
               Manage your 3D printers. Each printer has its own configuration for cost calculations.
             </p>
           </div>
-          <Button onClick={handleOpenAddModal}>Add Printer</Button>
+          <Button onClick={handleOpenAddModal}>{t('settings.printers.add')}</Button>
         </div>
       </Card>
 
@@ -367,7 +377,9 @@ export default function PrintersPage() {
             <Spinner size="lg" />
           </div>
         ) : printers.length === 0 ? (
-          <p className="text-sm text-gray-600">No printers configured yet. Add your first printer to get started.</p>
+          <p className="text-sm text-gray-600">
+            {t('settings.printers.noPrinters')}. {t('settings.printers.noPrintersSubtitle')}
+          </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {printers.map((printer) => (
@@ -377,7 +389,9 @@ export default function PrintersPage() {
                     <h3 className="text-base font-semibold text-gray-900">{printer.name || 'Unnamed Printer'}</h3>
                     <p className="text-sm text-gray-600">{printer.brand || '-'}</p>
                   </div>
-                  <Badge variant={getTypeBadgeVariant(printer.type)}>{printer.type || 'FDM'}</Badge>
+                  <Badge variant={getTypeBadgeVariant(printer.type)}>
+                    {getTypeLabel(printer.type, t)}
+                  </Badge>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -388,7 +402,7 @@ export default function PrintersPage() {
                   <div className="rounded-md bg-gray-50 p-2">
                     <p className="text-xs uppercase tracking-wide text-gray-500">Hourly Fee</p>
                     <p className="mt-1 font-medium text-gray-900">
-                      ${Number(printer.hourly_amortization_fee ?? 0).toFixed(2)}/hr
+                      {formatCurrency(Number(printer.hourly_amortization_fee ?? 0), companyCurrency)}/hr
                     </p>
                   </div>
                   <div className="rounded-md bg-gray-50 p-2">
@@ -403,10 +417,10 @@ export default function PrintersPage() {
 
                 <div className="mt-4 flex gap-2">
                   <Button size="sm" variant="secondary" onClick={() => handleOpenEditModal(printer)}>
-                    Edit
+                    {t('settings.printers.edit')}
                   </Button>
                   <Button size="sm" variant="danger" onClick={() => handleOpenDeleteModal(printer)}>
-                    Delete
+                    {t('settings.printers.delete')}
                   </Button>
                 </div>
               </div>
@@ -415,7 +429,11 @@ export default function PrintersPage() {
         )}
       </Card>
 
-      <Modal isOpen={isFormModalOpen} onClose={closeFormModal} title={editingPrinter ? 'Edit Printer' : 'Add Printer'}>
+      <Modal
+        isOpen={isFormModalOpen}
+        onClose={closeFormModal}
+        title={editingPrinter ? t('settings.printers.edit') : t('settings.printers.add')}
+      >
         <div className="space-y-4">
           {!editingPrinter && (
             <div>
@@ -426,14 +444,14 @@ export default function PrintersPage() {
                   variant={formMode === 'preset' ? 'primary' : 'secondary'}
                   onClick={() => setFormMode('preset')}
                 >
-                  From Preset
+                  {t('settings.printers.fromPreset')}
                 </Button>
                 <Button
                   size="sm"
                   variant={formMode === 'custom' ? 'primary' : 'secondary'}
                   onClick={() => setFormMode('custom')}
                 >
-                  Custom
+                  {t('settings.printers.custom')}
                 </Button>
               </div>
             </div>
@@ -450,7 +468,7 @@ export default function PrintersPage() {
                 onChange={handlePresetChange}
                 className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white"
               >
-                <option value="">Select a preset</option>
+                <option value="">{t('settings.printers.selectPreset')}</option>
                 {Object.entries(presetGroups).map(([brand, presets]) => (
                   <optgroup key={brand} label={brand}>
                     {presets.map((entry) => (
@@ -468,7 +486,7 @@ export default function PrintersPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Input
               id="printer-name"
-              label="Name"
+              label={t('settings.printers.name')}
               value={formValues.name}
               onChange={handleFieldChange('name')}
               placeholder="e.g. Bambu Lab X1 Carbon"
@@ -476,21 +494,21 @@ export default function PrintersPage() {
             />
             <Input
               id="printer-brand"
-              label="Brand"
+              label={t('settings.printers.brand')}
               value={formValues.brand}
               onChange={handleFieldChange('brand')}
               placeholder="e.g. Bambu Lab"
             />
             <Select
               id="printer-type"
-              label="Type"
+              label={t('settings.printers.type')}
               value={formValues.type}
               onChange={handleFieldChange('type')}
-              options={TYPE_OPTIONS}
+              options={typeOptions}
             />
             <Input
               id="printer-wattage"
-              label="Wattage (W)"
+              label={t('settings.printers.wattage')}
               type="number"
               min="0"
               step="0.01"
@@ -500,7 +518,7 @@ export default function PrintersPage() {
             />
             <Input
               id="printer-hourly-fee"
-              label="Hourly Machine Fee ($/hr)"
+              label={`${t('settings.printers.hourlyFee')} (${getCurrencySymbol(companyCurrency)}/hr)`}
               type="number"
               min="0"
               step="0.01"
@@ -510,7 +528,7 @@ export default function PrintersPage() {
             />
             <Input
               id="printer-profit-margin"
-              label="Profit Margin %"
+              label={t('settings.printers.profitMargin')}
               type="number"
               min="0"
               max="1000"
@@ -521,7 +539,7 @@ export default function PrintersPage() {
             />
             <Input
               id="printer-failure-margin"
-              label="Failure Margin %"
+              label={t('settings.printers.failureMargin')}
               type="number"
               min="0"
               max="100"
@@ -535,29 +553,29 @@ export default function PrintersPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={closeFormModal} disabled={saving}>
-              Cancel
+              {t('settings.printers.cancel')}
             </Button>
             <Button onClick={handleSavePrinter} loading={saving}>
-              {editingPrinter ? 'Save Changes' : 'Save Printer'}
+              {saving ? t('settings.printers.saving') : t('settings.printers.save')}
             </Button>
           </div>
         </div>
       </Modal>
 
-      <Modal isOpen={isDeleteModalOpen} onClose={closeDeleteModal} title="Delete Printer">
+      <Modal isOpen={isDeleteModalOpen} onClose={closeDeleteModal} title={t('settings.printers.delete')}>
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
-            Are you sure you want to delete
+            {t('settings.printers.deleteConfirm')}{' '}
             <span className="font-semibold text-gray-900"> {pendingDeletePrinter?.name || 'this printer'}</span>?
             This action cannot be undone.
           </p>
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={closeDeleteModal} disabled={saving}>
-              Cancel
+              {t('settings.printers.cancel')}
             </Button>
             <Button variant="danger" onClick={handleDeletePrinter} loading={saving}>
-              Delete
+              {saving ? t('settings.printers.saving') : t('settings.printers.delete')}
             </Button>
           </div>
         </div>

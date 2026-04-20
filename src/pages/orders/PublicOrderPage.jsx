@@ -4,6 +4,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { Badge } from '../../components/ui/Badge';
 import OrderProgressBar from '../../components/OrderProgressBar';
 import { getPublicOrder } from '../../lib/orders';
+import { useTranslation } from 'react-i18next';
 
 const STATUS_BADGE_VARIANT = {
   pending: 'neutral',
@@ -11,11 +12,11 @@ const STATUS_BADGE_VARIANT = {
   completed: 'success',
 };
 
-function statusLabel(status) {
+function statusLabel(status, t) {
   const labels = {
-    pending: 'Pending',
-    in_progress: 'In Progress',
-    completed: 'Completed',
+    pending: t('status.pending'),
+    in_progress: t('status.inProgress'),
+    completed: t('status.completed'),
   };
 
   return labels[status] || status;
@@ -23,6 +24,7 @@ function statusLabel(status) {
 
 export default function PublicOrderPage() {
   const { token } = useParams();
+  const { t } = useTranslation();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -93,9 +95,9 @@ export default function PublicOrderPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-semibold text-gray-900">Order not found</h1>
+          <h1 className="text-lg font-semibold text-gray-900">{t('orders.public.notFound')}</h1>
           <p className="mt-2 text-sm text-gray-600">
-            This tracking link is no longer available or may be invalid.
+            {t('orders.public.notFoundSubtitle')}
           </p>
         </div>
       </div>
@@ -118,7 +120,7 @@ export default function PublicOrderPage() {
             )}
             <div>
               <h1 className="text-xl font-semibold text-gray-900">{order.company_name || 'Company'}</h1>
-              <p className="text-sm text-gray-500">Order Tracking</p>
+              <p className="text-sm text-gray-500">{t('orders.public.orderTracking')}</p>
             </div>
           </div>
         </div>
@@ -128,14 +130,18 @@ export default function PublicOrderPage() {
         <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-gray-500">Client</p>
+              <p className="text-sm text-gray-500">{t('orders.public.client')}</p>
               <p className="text-lg font-medium text-gray-900">{order.client_name || 'Client'}</p>
             </div>
-            <Badge variant={STATUS_BADGE_VARIANT[order.status] || 'neutral'} className="text-base">
-              {statusLabel(order.status)}
-            </Badge>
+            <div className="text-right">
+              <p className="text-sm text-gray-500">{t('orders.public.status')}</p>
+              <Badge variant={STATUS_BADGE_VARIANT[order.status] || 'neutral'} className="text-base">
+                {statusLabel(order.status, t)}
+              </Badge>
+            </div>
           </div>
 
+          <p className="text-sm text-gray-500">{t('orders.public.progress')}</p>
           <OrderProgressBar
             completionPercent={order.completion_percent || 0}
             status={order.status}
@@ -144,7 +150,7 @@ export default function PublicOrderPage() {
         </div>
 
         <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-6">
-          <h2 className="text-base font-semibold text-gray-900">Pieces</h2>
+          <h2 className="text-base font-semibold text-gray-900">{t('orders.public.pieces')}</h2>
 
           {pieces.length === 0 ? (
             <p className="text-sm text-gray-500">No pieces found for this order.</p>
@@ -168,7 +174,7 @@ export default function PublicOrderPage() {
                     <span className="text-sm font-medium text-gray-800">{piece.name || 'Piece'}</span>
                   </div>
                   <Badge variant={STATUS_BADGE_VARIANT[piece.status] || 'neutral'} size="sm">
-                    {statusLabel(piece.status)}
+                    {statusLabel(piece.status, t)}
                   </Badge>
                 </div>
               ))}
@@ -176,7 +182,7 @@ export default function PublicOrderPage() {
           )}
         </div>
 
-        <footer className="py-4 text-center text-xs text-gray-400">Powered by 3DPrintCalc Pro</footer>
+        <footer className="py-4 text-center text-xs text-gray-400">{t('orders.public.poweredBy')}</footer>
       </main>
     </div>
   );

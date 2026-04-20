@@ -13,6 +13,8 @@ import {
   TextRun,
   WidthType,
 } from 'docx';
+import i18n from '../i18n';
+import { formatCurrency } from './currency';
 
 function toNumber(value) {
   const parsed = Number(value);
@@ -25,15 +27,6 @@ function resolveCurrency(companyData) {
     companyData?.currency ||
     'USD'
   );
-}
-
-function formatCurrency(value, currency) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toNumber(value));
 }
 
 function getQuoteDate(quoteData) {
@@ -121,7 +114,7 @@ function resolveMaterials(quoteData) {
         : (weight / 1000) * costPerKg;
 
     return {
-      name: item?.name || item?.materialName || `Material ${index + 1}`,
+      name: item?.name || item?.materialName || `${i18n.t('document.material')} ${index + 1}`,
       type: item?.type || item?.materialType || 'N/A',
       color: item?.color || item?.materialColor || null,
       weight,
@@ -131,16 +124,10 @@ function resolveMaterials(quoteData) {
   });
 }
 
-function resolveEstimatedGrams(fileData) {
-  const estimatedGrams = toNumber(fileData?.estimatedGrams ?? fileData?.estimated_grams);
-  if (estimatedGrams > 0) return estimatedGrams;
-
-  const volumeCm3 = toNumber(fileData?.volumeCm3 ?? fileData?.volume_cm3 ?? fileData?.volume);
-  if (volumeCm3 > 0) {
-    return volumeCm3 * 1.24;
-  }
-
-  return 0;
+function stripKnownModelExtension(fileName) {
+  const raw = String(fileName || '').trim();
+  if (!raw) return '';
+  return raw.replace(/\.(3mf|stl)$/i, '');
 }
 
 function resolveBreakdown(quoteData) {
@@ -162,6 +149,14 @@ function resolveBreakdown(quoteData) {
       materialCost + electricityCost + amortizationCost + extraCosts.reduce((sum, item) => sum + toNumber(item?.amount), 0)
   );
   const profitAmount = toNumber(breakdown.profitAmount ?? quoteData?.profitAmount);
+  const priceBeforeDiscount = toNumber(
+    breakdown.priceBeforeDiscount ??
+      quoteData?.priceBeforeDiscount ??
+      subtotal + profitAmount
+  );
+  const discountAmount = toNumber(breakdown.discountAmount);
+  const taxRate = toNumber(breakdown.taxRate ?? quoteData?.tax_rate ?? 0);
+  const taxAmount = toNumber(breakdown.taxAmount);
   const totalPrice = toNumber(breakdown.totalPrice ?? quoteData?.total_price ?? quoteData?.totalPrice ?? subtotal + profitAmount);
 
   return {
@@ -171,15 +166,23 @@ function resolveBreakdown(quoteData) {
     extraCosts,
     subtotal,
     profitAmount,
+    priceBeforeDiscount,
+    discountAmount,
+    taxRate,
+    taxAmount,
     totalPrice,
   };
 }
 
-function resolvePrintInfo(quoteData, fileDataArray = []) {
-  const printHours = toNumber(quoteData?.print_hours ?? quoteData?.printHours ?? quoteData?.totalPrintHours);
-  const legacyFileData = Array.isArray(quoteData?.file_data) ? null : quoteData?.file_data;
+function resolvePartsInfo(quoteData, fileDataArray = []) {
+  const normalizedFiles = fileDataArray.map((file, index) => ({
+    name: stripKnownModelExtension(file?.name || file?.fileName || file?.filename || `${i18n.t('document.parts')} ${index + 1}`),
+    partCount: toNumber(file?.partCount),
+  }));
+  const partsFromFiles = normalizedFiles.reduce((sum, file) => sum + file.partCount, 0);
   const partCount = toNumber(
-    legacyFileData?.partCount ??
+    (partsFromFiles > 0 ? partsFromFiles : undefined) ??
+      quoteData?.file_data?.partCount ??
       quoteData?.importedModel?.partCount ??
       quoteData?.partCount ??
       quoteData?.partsCount ??
@@ -187,8 +190,8 @@ function resolvePrintInfo(quoteData, fileDataArray = []) {
   );
 
   return {
-    printHours,
     partCount,
+    files: normalizedFiles,
   };
 }
 
@@ -229,12 +232,29 @@ export async function generateQuoteDocx(quoteData, companyData) {
 
   const materials = resolveMaterials(quoteData);
   const breakdown = resolveBreakdown(quoteData);
-  const printInfo = resolvePrintInfo(quoteData, fileDataArray);
+  const partsInfo = resolvePartsInfo(quoteData, fileDataArray);
 
   const clientName = resolveClientName(quoteData);
   const designUrl = quoteData?.client?.designUrl || quoteData?.design_url || quoteData?.designUrl;
   const logoUrl = companyData?.logo_url;
   const photoUrl = quoteData?.photo_url || quoteData?.photoUrl;
+  const estimatedDeliveryDays = toNumber(quoteData?.estimated_delivery_days);
+  const discount = quoteData.discount || (quoteData.discount_percent ? {
+    type: 'percentage',
+    value: quoteData.discount_percent,
+    note: quoteData.discount_note,
+  } : null);
+  const discountAmount = toNumber(quoteData.cost_breakdown?.discountAmount ?? breakdown.discountAmount ?? 0);
+  const discountType = String(discount?.type || '').toLowerCase();
+  const discountValue = toNumber(discount?.value);
+  const discountLabel = discountType === 'percentage'
+    ? i18n.t('document.discountPercentage', { value: discountValue })
+    : i18n.t('document.discountFixed');
+  const hasDiscount = Boolean(discount) && discountAmount > 0;
+  const taxRate = toNumber(breakdown.taxRate ?? quoteData.cost_breakdown?.taxRate ?? 0);
+  const taxAmount = toNumber(breakdown.taxAmount ?? quoteData.cost_breakdown?.taxAmount ?? 0);
+  const hasTax = taxRate > 0 && taxAmount > 0;
+  const baseSubtotal = toNumber(breakdown.priceBeforeDiscount) || toNumber(breakdown.subtotal + breakdown.profitAmount);
 
   let logoRun = null;
   let photoRun = null;
@@ -272,8 +292,8 @@ export async function generateQuoteDocx(quoteData, companyData) {
   const materialTable = makeSimpleTable([
     new TableRow({
       children: [
-        makeCell('Material', true),
-        makeCell('Weight (g)', true),
+        makeCell(i18n.t('document.material'), true),
+        makeCell(i18n.t('document.grams'), true),
       ],
     }),
     ...materials.map((material) =>
@@ -285,6 +305,43 @@ export async function generateQuoteDocx(quoteData, companyData) {
       })
     ),
   ]);
+
+  const pricingRows = [
+    new TableRow({
+      children: [
+        makeCell(i18n.t('document.subtotal'), true),
+        makeCell(formatCurrency(baseSubtotal, currency)),
+      ],
+    }),
+    ...(hasDiscount
+      ? [
+          new TableRow({
+            children: [
+              makeCell(discountLabel, true),
+              makeCell(`-${formatCurrency(discountAmount, currency)}`),
+            ],
+          }),
+        ]
+      : []),
+    ...(hasTax
+      ? [
+          new TableRow({
+            children: [
+              makeCell(i18n.t('document.taxIva', { value: taxRate }), true),
+              makeCell(formatCurrency(taxAmount, currency)),
+            ],
+          }),
+        ]
+      : []),
+    new TableRow({
+      children: [
+        makeCell(i18n.t('document.total'), true),
+        makeCell(formatCurrency(breakdown.totalPrice, currency), true),
+      ],
+    }),
+  ];
+
+  const pricingTable = makeSimpleTable(pricingRows);
 
   const doc = new Document({
     sections: [
@@ -305,88 +362,61 @@ export async function generateQuoteDocx(quoteData, companyData) {
             : []),
           new Paragraph({
             heading: HeadingLevel.HEADING_1,
-            children: [new TextRun('3D Printing Quote')],
+            children: [new TextRun(i18n.t('document.title'))],
           }),
-          new Paragraph({ children: [new TextRun(`Quote Date: ${formatDate(quoteDate)}`)] }),
-          new Paragraph({ children: [new TextRun(`Expiration Date: ${formatDate(expirationDate)}`)] }),
-          new Paragraph({ children: [new TextRun(`Client: ${clientName}`)] }),
+          new Paragraph({ children: [new TextRun(`${i18n.t('document.quoteDate')}: ${formatDate(quoteDate)}`)] }),
+          new Paragraph({ children: [new TextRun(`${i18n.t('document.expirationDate')}: ${formatDate(expirationDate)}`)] }),
+          new Paragraph({ children: [new TextRun(`${i18n.t('document.client')}: ${clientName}`)] }),
+          ...(estimatedDeliveryDays > 0
+            ? [new Paragraph({ children: [new TextRun(`${i18n.t('document.estimatedDelivery')}: ${estimatedDeliveryDays} ${i18n.t('document.days')}`)] })]
+            : []),
           new Paragraph({ text: '' }),
           new Paragraph({
             heading: HeadingLevel.HEADING_2,
-            children: [new TextRun('Materials')],
+            children: [new TextRun(i18n.t('document.materials'))],
           }),
           materialTable,
-          new Paragraph({ text: '' }),
           new Paragraph({
             children: [
-              new TextRun({ text: `Total: ${formatCurrency(breakdown.totalPrice, currency)}`, bold: true, size: 28 }),
+              new TextRun({
+                text: i18n.t('document.purgeNote'),
+                italics: true,
+                size: 18,
+              }),
             ],
           }),
           new Paragraph({ text: '' }),
           new Paragraph({
             heading: HeadingLevel.HEADING_2,
-            children: [new TextRun('Print Info')],
+            children: [new TextRun(i18n.t('document.pricing'))],
           }),
-          new Paragraph({
-            children: [new TextRun(`Total print time (hours): ${printInfo.printHours.toFixed(2)}`)],
-          }),
-          new Paragraph({
-            children: [new TextRun(`Number of parts: ${printInfo.partCount || 0}`)],
-          }),
-          ...(() => {
-            const printerSnapshot = quoteData?.printer_snapshot;
-            if (!printerSnapshot) {
-              return [];
-            }
-
-            const printerText = `${printerSnapshot.name}${printerSnapshot.brand ? ` (${printerSnapshot.brand})` : ''} - ${printerSnapshot.type || 'N/A'}, ${printerSnapshot.wattage || 0}W`;
-
-            return [
-              new Paragraph({
-                children: [
-                  new TextRun({ text: 'Printer: ', bold: true }),
-                  new TextRun(printerText),
-                ],
-              }),
-            ];
-          })(),
-          ...(() => {
-            if (fileDataArray.length === 0) return [];
-
-            if (fileDataArray.length === 1) {
-              const file = fileDataArray[0] || {};
-              const fileName = file?.name || file?.fileName || file?.filename || 'N/A';
-              const fileType = file?.type || file?.fileType || file?.format || 'N/A';
-              const estimatedGrams = resolveEstimatedGrams(file);
-
-              return [
+          pricingTable,
+          ...(discount?.note
+            ? [
                 new Paragraph({
                   children: [
-                    new TextRun(
-                      `File: ${fileName} | Type: ${fileType} | Filament: ${estimatedGrams.toFixed(2)} g`
-                    ),
+                    new TextRun({ text: `${i18n.t('document.discountNote')}: "${String(discount.note).trim()}"`, italics: true }),
                   ],
                 }),
-              ];
+              ]
+            : []),
+          new Paragraph({ text: '' }),
+          new Paragraph({
+            heading: HeadingLevel.HEADING_2,
+            children: [new TextRun(i18n.t('document.parts'))],
+          }),
+          new Paragraph({
+            children: [new TextRun(`${i18n.t('document.partCount')}: ${partsInfo.partCount || partsInfo.files.length || 0}`)],
+          }),
+          ...(() => {
+            if (partsInfo.files.length === 0) {
+              return [new Paragraph({ children: [new TextRun(i18n.t('document.noParts'))] })];
             }
 
+            const names = partsInfo.files.map((file, index) => file.name || `${i18n.t('document.parts')} ${index + 1}`);
             return [
-              new Paragraph({ text: '' }),
               new Paragraph({
-                children: [new TextRun({ text: 'Files', bold: true })],
-              }),
-              ...fileDataArray.map((file, index) => {
-                const fileName = file?.name || file?.fileName || file?.filename || `File ${index + 1}`;
-                const fileType = file?.type || file?.fileType || file?.format || 'N/A';
-                const estimatedGrams = resolveEstimatedGrams(file);
-
-                return new Paragraph({
-                  children: [
-                    new TextRun(
-                      `${index + 1}. ${fileName} | Type: ${fileType} | Filament: ${estimatedGrams.toFixed(2)} g`
-                    ),
-                  ],
-                });
+                children: [new TextRun(`${i18n.t('document.parts')}: ${names.join(', ')}`)],
               }),
             ];
           })(),
@@ -398,7 +428,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
                     new ExternalHyperlink({
                       children: [
                         new TextRun({
-                          text: 'Click to see design',
+                          text: i18n.t('document.designLink'),
                           style: 'Hyperlink',
                         }),
                       ],
@@ -414,7 +444,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
             return [
               new Paragraph({ text: '' }),
               new Paragraph({
-                children: [new TextRun({ text: 'Notes', bold: true })],
+                children: [new TextRun({ text: i18n.t('document.notes'), bold: true })],
               }),
               new Paragraph({
                 children: [new TextRun(notes)],
@@ -425,7 +455,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
             ? [
                 new Paragraph({ text: '' }),
                 new Paragraph({
-                  children: [new TextRun({ text: 'Product Photo', bold: true })],
+                  children: [new TextRun({ text: i18n.t('document.productPhoto'), bold: true })],
                 }),
                 new Paragraph({
                   children: [photoRun],
@@ -435,8 +465,8 @@ export async function generateQuoteDocx(quoteData, companyData) {
           new Paragraph({ text: '' }),
           new Paragraph({
             children: [
-              new TextRun({ text: 'Payment Terms: ', bold: true }),
-              new TextRun('A 50% upfront deposit is required to start the order.'),
+              new TextRun({ text: `${i18n.t('document.paymentTerms')}: `, bold: true }),
+              new TextRun(i18n.t('document.paymentTermsText')),
             ],
           }),
           new Paragraph({ text: '' }),
@@ -444,7 +474,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
             alignment: AlignmentType.CENTER,
             children: [
               new TextRun({
-                text: `Generated: ${new Date().toLocaleString()} | This quote is valid for 30 days from the date of issue.`,
+                text: `${i18n.t('document.generated')}: ${new Date().toLocaleString()} | ${i18n.t('document.validityNote')}`,
                 italics: true,
               }),
             ],

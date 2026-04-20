@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../hooks/useAuth';
@@ -8,6 +9,7 @@ import { db } from '../../lib/firebase';
 
 export default function RegisterPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { register, registerWorker } = useAuth();
 
   const [isInviteMode, setIsInviteMode] = useState(false);
@@ -52,21 +54,21 @@ export default function RegisterPage() {
   const validate = () => {
     const nextErrors = {};
 
-    if (!form.displayName.trim()) nextErrors.displayName = 'Display name is required';
-    if (!form.email.trim()) nextErrors.email = 'Email is required';
-    if (!form.password) nextErrors.password = 'Password is required';
+    if (!form.displayName.trim()) nextErrors.displayName = t('validation.displayNameRequired');
+    if (!form.email.trim()) nextErrors.email = t('validation.emailRequired');
+    if (!form.password) nextErrors.password = t('validation.passwordRequired');
     if (form.password && form.password.length < 6) {
-      nextErrors.password = 'Password must be at least 6 characters';
+      nextErrors.password = t('validation.passwordMinLength');
     }
-    if (!form.confirmPassword) nextErrors.confirmPassword = 'Please confirm your password';
+    if (!form.confirmPassword) nextErrors.confirmPassword = t('validation.confirmPasswordRequired');
     if (form.password && form.confirmPassword && form.password !== form.confirmPassword) {
-      nextErrors.confirmPassword = 'Passwords do not match';
+      nextErrors.confirmPassword = t('validation.passwordsNoMatch');
     }
 
     if (isInviteMode) {
-      if (!form.inviteCode.trim()) nextErrors.inviteCode = 'Invite code is required';
+      if (!form.inviteCode.trim()) nextErrors.inviteCode = t('validation.inviteCodeRequired');
     } else if (!form.companyName.trim()) {
-      nextErrors.companyName = 'Company name is required';
+      nextErrors.companyName = t('validation.companyNameRequired');
     }
 
     setErrors(nextErrors);
@@ -114,7 +116,7 @@ export default function RegisterPage() {
         const inviteData = await findInvite(form.inviteCode);
 
         if (!inviteData) {
-          setFirebaseError('Invalid or expired invite code');
+          setFirebaseError(t('validation.invalidInviteCode'));
           setSubmitting(false);
           return;
         }
@@ -137,9 +139,9 @@ export default function RegisterPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Register</h1>
+      <h1 className="text-2xl font-bold text-slate-900">{t('auth.register')}</h1>
       <p className="mt-1 text-sm text-slate-600">
-        {isInviteMode ? 'Join your company with an invite code.' : 'Create your company and admin account.'}
+        {isInviteMode ? t('auth.registerSubtitleInvite') : t('auth.registerSubtitleAdmin')}
       </p>
 
       <div className="mt-4">
@@ -150,7 +152,7 @@ export default function RegisterPage() {
             onChange={handleInviteToggle}
             className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
           />
-          I have an invite code
+          {t('auth.haveInviteCode')}
         </label>
       </div>
 
@@ -160,7 +162,7 @@ export default function RegisterPage() {
             id="companyName"
             name="companyName"
             type="text"
-            label="Company Name"
+            label={t('auth.companyName')}
             value={form.companyName}
             onChange={handleChange}
             error={errors.companyName}
@@ -170,7 +172,7 @@ export default function RegisterPage() {
             id="inviteCode"
             name="inviteCode"
             type="text"
-            label="Invite Code"
+            label={t('auth.inviteCode')}
             value={form.inviteCode}
             onChange={handleChange}
             error={errors.inviteCode}
@@ -181,7 +183,7 @@ export default function RegisterPage() {
           id="displayName"
           name="displayName"
           type="text"
-          label="Display Name"
+          label={t('auth.displayName')}
           value={form.displayName}
           onChange={handleChange}
           error={errors.displayName}
@@ -192,7 +194,7 @@ export default function RegisterPage() {
           name="email"
           type="email"
           autoComplete="email"
-          label="Email"
+          label={t('auth.email')}
           value={form.email}
           onChange={handleChange}
           error={errors.email}
@@ -203,7 +205,7 @@ export default function RegisterPage() {
           name="password"
           type="password"
           autoComplete="new-password"
-          label="Password"
+          label={t('auth.password')}
           value={form.password}
           onChange={handleChange}
           error={errors.password}
@@ -214,7 +216,7 @@ export default function RegisterPage() {
           name="confirmPassword"
           type="password"
           autoComplete="new-password"
-          label="Confirm Password"
+          label={t('auth.confirmPassword')}
           value={form.confirmPassword}
           onChange={handleChange}
           error={errors.confirmPassword}
@@ -227,14 +229,18 @@ export default function RegisterPage() {
         )}
 
         <Button type="submit" variant="primary" loading={submitting} disabled={submitting} className="w-full">
-          {isInviteMode ? 'Join Company' : 'Create Account'}
+          {submitting && !isInviteMode
+            ? t('auth.creatingAccount')
+            : isInviteMode
+              ? t('auth.joinCompany')
+              : t('auth.createAccount')}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-600">
-        Already have an account?{' '}
+        {t('auth.haveAccount')}{' '}
         <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
-          Sign in
+          {t('auth.signIn')}
         </Link>
       </p>
     </div>

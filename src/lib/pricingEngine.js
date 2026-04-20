@@ -44,7 +44,35 @@ export function calculateQuote(input) {
 
   const subtotal = round2(materialCost + electricityCost + amortizationCost + extraCostsTotal);
   const profitAmount = round2(subtotal * profitMargin);
-  const totalPrice = round2(subtotal + profitAmount);
+  const priceBeforeDiscount = round2(subtotal + profitAmount);
+  const legacyDiscountPercent = Number(input?.discountPercent);
+  const hasLegacyDiscountPercent = Number.isFinite(legacyDiscountPercent);
+  const normalizedDiscount = input?.discount?.type === 'fixed' || input?.discount?.type === 'percentage'
+    ? {
+      type: input.discount.type,
+      value: Number(input?.discount?.value) || 0,
+    }
+    : hasLegacyDiscountPercent
+      ? {
+        type: 'percentage',
+        value: legacyDiscountPercent,
+      }
+      : {
+        type: undefined,
+        value: 0,
+      };
+
+  const discountAmountRaw = normalizedDiscount.type === 'fixed'
+    ? Math.min(normalizedDiscount.value || 0, priceBeforeDiscount)
+    : normalizedDiscount.type === 'percentage'
+      ? priceBeforeDiscount * ((normalizedDiscount.value || 0) / 100)
+      : 0;
+
+  const discountAmount = round2(discountAmountRaw);
+  const priceAfterDiscount = round2(Math.max(0, priceBeforeDiscount - discountAmount));
+  const taxRate = Number(companyConfig.taxRate) || 0;
+  const taxAmount = round2(priceAfterDiscount * taxRate);
+  const totalPrice = round2(priceAfterDiscount + taxAmount);
 
   return {
     materialCost,
@@ -54,6 +82,12 @@ export function calculateQuote(input) {
     extraCostsTotal,
     subtotal,
     profitAmount,
+    priceBeforeDiscount,
+    discount: normalizedDiscount,
+    discountAmount,
+    priceAfterDiscount,
+    taxRate,
+    taxAmount,
     totalPrice,
   };
 }

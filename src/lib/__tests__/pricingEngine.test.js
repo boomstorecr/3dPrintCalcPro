@@ -233,4 +233,103 @@ describe('calculateQuote', () => {
     expect(result.subtotal).toBe(0.3);
     expect(result.totalPrice).toBe(0.3);
   });
+
+  it('applies percentage discount from the new discount object format', () => {
+    const result = calculateQuote({
+      materials: [],
+      printHours: 0,
+      companyConfig: {
+        kwhCost: 0,
+        printerWattage: 0,
+        hourlyAmortizationFee: 0,
+        profitMargin: 0,
+        failureMargin: 0,
+      },
+      extraCosts: [{ name: 'Base', amount: 100 }],
+      discount: { type: 'percentage', value: 10 },
+    });
+
+    expect(result.discount).toEqual({ type: 'percentage', value: 10 });
+    expect(result.discountAmount).toBe(10);
+    expect(result.priceBeforeDiscount).toBe(100);
+    expect(result.priceAfterDiscount).toBe(90);
+  });
+
+  it('applies fixed amount discount from the new discount object format', () => {
+    const result = calculateQuote({
+      materials: [],
+      printHours: 0,
+      companyConfig: {
+        kwhCost: 0,
+        printerWattage: 0,
+        hourlyAmortizationFee: 0,
+        profitMargin: 0,
+        failureMargin: 0,
+      },
+      extraCosts: [{ name: 'Base', amount: 100 }],
+      discount: { type: 'fixed', value: 50 },
+    });
+
+    expect(result.discount).toEqual({ type: 'fixed', value: 50 });
+    expect(result.discountAmount).toBe(50);
+    expect(result.priceAfterDiscount).toBe(50);
+  });
+
+  it('caps fixed discount when it is larger than priceBeforeDiscount', () => {
+    const result = calculateQuote({
+      materials: [],
+      printHours: 0,
+      companyConfig: {
+        kwhCost: 0,
+        printerWattage: 0,
+        hourlyAmortizationFee: 0,
+        profitMargin: 0,
+        failureMargin: 0,
+      },
+      extraCosts: [{ name: 'Base', amount: 100 }],
+      discount: { type: 'fixed', value: 150 },
+    });
+
+    expect(result.priceBeforeDiscount).toBe(100);
+    expect(result.discountAmount).toBe(100);
+    expect(result.priceAfterDiscount).toBe(0);
+  });
+
+  it('uses zero discount when no discount is provided', () => {
+    const result = calculateQuote({
+      materials: [],
+      printHours: 0,
+      companyConfig: {
+        kwhCost: 0,
+        printerWattage: 0,
+        hourlyAmortizationFee: 0,
+        profitMargin: 0,
+        failureMargin: 0,
+      },
+      extraCosts: [{ name: 'Base', amount: 100 }],
+    });
+
+    expect(result.discountAmount).toBe(0);
+    expect(result.priceAfterDiscount).toBe(100);
+  });
+
+  it('supports legacy discountPercent as percentage discount for backward compatibility', () => {
+    const result = calculateQuote({
+      materials: [],
+      printHours: 0,
+      companyConfig: {
+        kwhCost: 0,
+        printerWattage: 0,
+        hourlyAmortizationFee: 0,
+        profitMargin: 0,
+        failureMargin: 0,
+      },
+      extraCosts: [{ name: 'Base', amount: 100 }],
+      discountPercent: 10,
+    });
+
+    expect(result.discount).toEqual({ type: 'percentage', value: 10 });
+    expect(result.discountAmount).toBe(10);
+    expect(result.priceAfterDiscount).toBe(90);
+  });
 });

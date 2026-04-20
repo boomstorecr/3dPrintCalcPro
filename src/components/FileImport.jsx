@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FileDropzone } from './ui/FileDropzone';
 import { Spinner } from './ui/Spinner';
 import { Card } from './ui/Card';
@@ -75,6 +76,7 @@ function ColorSwatch({ color }) {
 }
 
 export default function FileImport({ onResult, onClear }) {
+  const { t } = useTranslation();
   const [parsedFiles, setParsedFiles] = useState([]);
   const [processingCount, setProcessingCount] = useState(0);
   const [error, setError] = useState('');
@@ -90,7 +92,7 @@ export default function FileImport({ onResult, onClear }) {
     const incomingFiles = Array.from(files || []);
 
     if (incomingFiles.length === 0) {
-      setError('No supported files selected. Please upload .stl, .3mf, or .gcode files.');
+      setError(t('fileImport.noFiles'));
       return;
     }
 
@@ -118,7 +120,7 @@ export default function FileImport({ onResult, onClear }) {
         return;
       }
 
-      const message = result.reason?.message || 'Unknown error while processing file.';
+      const message = result.reason?.message || t('fileImport.processingError');
       failedMessages.push(`${fileName}: ${message}`);
     });
 
@@ -141,7 +143,7 @@ export default function FileImport({ onResult, onClear }) {
     });
 
     if (failedMessages.length > 0) {
-      setError(`Some files failed to process:\n${failedMessages.join('\n')}`);
+      setError(`${t('fileImport.processingError')}:\n${failedMessages.join('\n')}`);
     }
   };
 
@@ -198,7 +200,7 @@ export default function FileImport({ onResult, onClear }) {
         multiple={true}
         onFiles={handleFiles}
         disabled={processingCount > 0}
-        label="Drop .stl, .3mf, or .gcode files here or click to upload"
+        label={`${t('fileImport.dropzone')} (${t('fileImport.dropzoneHint')})`}
       />
 
       {processingCount > 0 && (
@@ -218,7 +220,7 @@ export default function FileImport({ onResult, onClear }) {
 
       {parsedFiles.length >= 2 && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-          <span className="font-semibold text-gray-900">Total:</span> {parsedFiles.length} files |{' '}
+          <span className="font-semibold text-gray-900">{t('common.total')}:</span> {parsedFiles.length} {t('quotes.preview.files').toLowerCase()} |{' '}
           {formatNumber(aggregated.totalGrams)} g filament | {formatNumber(aggregated.totalHours)} hours
         </div>
       )}
@@ -278,10 +280,10 @@ export default function FileImport({ onResult, onClear }) {
                   type="button"
                   onClick={() => handleRemoveFile(index)}
                   className="rounded-md border border-gray-300 px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50"
-                  aria-label={`Remove ${file.fileName}`}
-                  title="Remove"
+                  aria-label={`${t('fileImport.remove')} ${file.fileName}`}
+                  title={t('fileImport.remove')}
                 >
-                  X
+                  {t('fileImport.remove')}
                 </button>
               </div>
 
@@ -292,7 +294,7 @@ export default function FileImport({ onResult, onClear }) {
                       {file.plates.map((plate, plateIndex) => (
                         <div key={`${plate.name || 'plate'}-${plateIndex}`} className="rounded-md border border-gray-200 p-3">
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-gray-900">Plate {plateIndex + 1}</p>
+                            <p className="text-sm font-semibold text-gray-900">{t('fileImport.plates')} {plateIndex + 1}</p>
                             <p className="text-xs text-gray-600">
                               {formatNumber(plate.totalGrams)} g
                               {Number.isFinite(plate.estimatedHours) && plate.estimatedHours > 0
@@ -360,7 +362,7 @@ export default function FileImport({ onResult, onClear }) {
                   {file.fileType === 'gcode' && (
                     <div className="space-y-2 text-sm text-gray-700">
                       <p>
-                        <span className="font-medium text-gray-900">Print time:</span>{' '}
+                        <span className="font-medium text-gray-900">{t('fileImport.time')}:</span>{' '}
                         {Number.isFinite(file.estimatedHours) && file.estimatedHours > 0
                           ? `${formatNumber(file.estimatedHours)} hrs`
                           : 'Not available'}
@@ -399,7 +401,7 @@ export default function FileImport({ onResult, onClear }) {
                   {file.fileType === 'stl' && (
                     <div className="space-y-1 text-sm text-gray-700">
                       <p>
-                        <span className="font-medium text-gray-900">Estimated weight:</span>{' '}
+                        <span className="font-medium text-gray-900">{t('fileImport.weight')}:</span>{' '}
                         {formatNumber(file.estimatedGrams)} g
                       </p>
                       <p className="text-xs text-gray-500">

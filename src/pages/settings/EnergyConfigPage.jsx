@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Card } from '../../components/ui/Card';
 import { Input } from '../../components/ui/Input';
@@ -7,15 +6,18 @@ import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useTranslation } from 'react-i18next';
 import { db } from '../../lib/firebase';
 
 const DEFAULT_FORM = {
   kwh_cost: '0',
+  taxRate: '0',
 };
 
 export default function EnergyConfigPage() {
   const { userProfile } = useAuth();
   const { success, error } = useToast();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -47,6 +49,7 @@ export default function EnergyConfigPage() {
 
         setFormValues({
           kwh_cost: String(config.kwh_cost ?? 0),
+          taxRate: String((config.tax_rate ?? 0) * 100),
         });
       } catch (loadError) {
         console.error('[EnergyConfigPage] Failed to load config', loadError);
@@ -74,6 +77,7 @@ export default function EnergyConfigPage() {
 
     const parsedValues = {
       kwh_cost: Number(formValues.kwh_cost),
+      tax_rate: Number(formValues.taxRate) / 100,
     };
 
     const invalidNumericValue = Object.values(parsedValues).some(
@@ -92,18 +96,24 @@ export default function EnergyConfigPage() {
       return;
     }
 
+    if (Number(formValues.taxRate) < 0 || Number(formValues.taxRate) > 100) {
+      error('Tax / IVA must be between 0 and 100.');
+      return;
+    }
+
     setSaving(true);
 
     try {
       const companyRef = doc(db, 'companies', companyId);
       await updateDoc(companyRef, {
         'global_config.kwh_cost': parsedValues.kwh_cost,
+        'global_config.tax_rate': parsedValues.tax_rate,
       });
 
-      success('Energy configuration saved successfully.');
+      success(t('toast.energySaved'));
     } catch (saveError) {
       console.error('[EnergyConfigPage] Failed to save config', saveError);
-      error('Failed to save energy configuration.');
+      error(t('toast.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -111,8 +121,8 @@ export default function EnergyConfigPage() {
 
   if (!isAdmin) {
     return (
-      <Card title="Energy & Electricity">
-        <p className="text-sm text-gray-600">Only administrators can edit energy and pricing settings.</p>
+      <Card title={t('settings.energy.title')}>
+        <p className="text-sm text-gray-600">{t('settings.energy.adminOnly')}</p>
       </Card>
     );
   }
@@ -127,14 +137,8 @@ export default function EnergyConfigPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Energy & Electricity">
-        <p className="mb-4 text-sm text-gray-600">
-          Printer-specific settings like wattage, hourly fees, and margins are now configured per printer in the{' '}
-          <Link to="/settings/printers" className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
-            Printers section
-          </Link>
-          .
-        </p>
+      <Card title={t('settings.energy.title')}>
+        <p className="mb-4 text-sm text-gray-600">{t('settings.energy.description')}</p>
 
         <div className="grid grid-cols-1 gap-5">
           <Input
@@ -142,15 +146,29 @@ export default function EnergyConfigPage() {
             type="number"
             min="0"
             step="0.0001"
-            label="Cost per kWh"
+            label={t('settings.energy.kwhCost')}
             value={formValues.kwh_cost}
             onChange={handleChange('kwh_cost')}
           />
+
+          <div className="space-y-1">
+            <Input
+              id="tax-rate"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              label={t('settings.energy.taxRate')}
+              value={formValues.taxRate}
+              onChange={handleChange('taxRate')}
+            />
+            <p className="text-sm text-gray-600">{t('settings.energy.taxDescription')}</p>
+          </div>
         </div>
 
         <div className="mt-6 flex justify-end">
           <Button onClick={handleSave} loading={saving}>
-            Save Configuration
+            {saving ? t('settings.energy.saving') : t('settings.energy.save')}
           </Button>
         </div>
       </Card>

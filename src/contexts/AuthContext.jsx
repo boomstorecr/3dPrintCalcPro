@@ -5,8 +5,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from 'firebase/auth';
-import { addDoc, collection, doc, getDoc, setDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
+import i18n from '../i18n';
 
 export const AuthContext = createContext(null);
 
@@ -22,6 +23,8 @@ const DEFAULT_GLOBAL_CONFIG = {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [companyCurrency, setCompanyCurrency] = useState('USD');
+  const [companyTaxRate, setCompanyTaxRate] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,6 +32,8 @@ export function AuthProvider({ children }) {
       if (!firebaseUser) {
         setUser(null);
         setUserProfile(null);
+        setCompanyCurrency('USD');
+        setCompanyTaxRate(0);
         setLoading(false);
         return;
       }
@@ -39,19 +44,41 @@ export function AuthProvider({ children }) {
 
         if (userSnap.exists()) {
           const profile = userSnap.data();
+
+          if (profile.company_id) {
+            const companyRef = doc(db, 'companies', profile.company_id);
+            const companySnap = await getDoc(companyRef);
+            if (companySnap.exists()) {
+              const companyData = companySnap.data();
+              setCompanyCurrency(companyData.global_config?.currency || companyData.currency || 'USD');
+              setCompanyTaxRate(companyData.global_config?.tax_rate || 0);
+            } else {
+              setCompanyTaxRate(0);
+            }
+          } else {
+            setCompanyTaxRate(0);
+          }
+
           setUserProfile({
             role: profile.role ?? null,
             company_id: profile.company_id ?? null,
             display_name: profile.display_name ?? null,
           });
+
+          if (profile.language) {
+            i18n.changeLanguage(profile.language);
+          }
         } else {
           setUserProfile(null);
+          setCompanyCurrency('USD');
+          setCompanyTaxRate(0);
         }
 
         setUser(firebaseUser);
       } catch (error) {
         setUser(firebaseUser);
         setUserProfile(null);
+        setCompanyTaxRate(0);
         console.error('[AuthContext] Failed to fetch user profile:', error);
       } finally {
         setLoading(false);
@@ -79,6 +106,7 @@ export function AuthProvider({ children }) {
         display_name: displayName,
         role: 'Admin',
         company_id: companyDoc.id,
+        language: i18n.language,
       });
 
       setUserProfile({
@@ -86,6 +114,8 @@ export function AuthProvider({ children }) {
         company_id: companyDoc.id,
         display_name: displayName,
       });
+      setCompanyCurrency(DEFAULT_GLOBAL_CONFIG.currency);
+      setCompanyTaxRate(0);
     } catch (error) {
       await credential.user.delete();
       throw error;
@@ -102,6 +132,7 @@ export function AuthProvider({ children }) {
         display_name: displayName,
         role: 'Worker',
         company_id: companyId,
+        language: i18n.language,
       });
 
       setUserProfile({
@@ -121,17 +152,33 @@ export function AuthProvider({ children }) {
     return signOut(auth);
   };
 
+  const updateLanguage = async (lang) => {
+    i18n.changeLanguage(lang);
+
+    if (user) {
+      try {
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, { language: lang });
+      } catch (error) {
+        console.error('[AuthContext] Failed to save language preference:', error);
+      }
+    }
+  };
+
   const value = useMemo(
     () => ({
       user,
       userProfile,
+      companyCurrency,
+      companyTaxRate,
       loading,
       login,
       register,
       registerWorker,
       logout,
+      updateLanguage,
     }),
-    [user, userProfile, loading]
+    [user, userProfile, companyCurrency, companyTaxRate, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

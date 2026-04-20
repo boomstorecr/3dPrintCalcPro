@@ -1,10 +1,17 @@
-import { Menu } from 'lucide-react';
+import { Globe, Menu } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 export default function Topbar({ setIsSidebarOpen }) {
-  const { userProfile } = useAuth();
+  const { t, i18n } = useTranslation();
+  const { userProfile, updateLanguage } = useAuth();
   const displayName = userProfile?.display_name || 'User';
   const initials = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+
+  const toggleLanguage = () => {
+    const newLang = i18n.language.startsWith('es') ? 'en' : 'es';
+    updateLanguage(newLang);
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 flex-shrink-0 bg-white shadow-sm border-b border-slate-200">
@@ -21,12 +28,21 @@ export default function Topbar({ setIsSidebarOpen }) {
         <div className="flex flex-1 items-center">
           <div className="flex flex-shrink-0 items-center md:hidden">
             <span className="text-lg font-bold text-slate-900 tracking-tight leading-none bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-              3DPrintCalc
+              {t('app.title')}
             </span>
           </div>
         </div>
 
         <div className="ml-4 flex items-center md:ml-6 space-x-4">
+          <button
+            type="button"
+            onClick={toggleLanguage}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+            title={t('language.label')}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            {i18n.language.startsWith('es') ? 'ES' : 'EN'}
+          </button>
           <div className="hidden md:flex flex-col text-right">
             <span className="text-sm font-semibold text-slate-900 leading-none">
               {displayName}

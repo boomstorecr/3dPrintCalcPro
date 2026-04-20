@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../../components/ui/Card';
 import { Table } from '../../components/ui/Table';
 import { Badge } from '../../components/ui/Badge';
@@ -9,16 +10,10 @@ import { Select } from '../../components/ui/Select';
 import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { formatCurrency } from '../../lib/currency';
 import { getQuotesByCompany } from '../../lib/quotes';
 
-const STATUS_OPTIONS = [
-  { label: 'All', value: 'all' },
-  { label: 'Draft', value: 'draft' },
-  { label: 'Sent', value: 'sent' },
-  { label: 'Accepted', value: 'accepted' },
-  { label: 'Rejected', value: 'rejected' },
-  { label: 'Expired', value: 'expired' },
-];
+const STATUS_VALUES = ['all', 'draft', 'sent', 'accepted', 'rejected', 'expired'];
 
 const statusBadgeVariant = {
   draft: 'neutral',
@@ -27,6 +22,12 @@ const statusBadgeVariant = {
   rejected: 'danger',
   expired: 'warning',
 };
+
+function normalizeStatusKey(status) {
+  return String(status || 'draft')
+    .toLowerCase()
+    .replace(/_([a-z])/g, (_, char) => char.toUpperCase());
+}
 
 function getClientName(quote) {
   return quote.client_name || quote.clientName || quote.client?.name || 'Unnamed Client';
@@ -58,8 +59,9 @@ function getQuoteTotal(quote) {
 }
 
 export default function QuoteHistoryPage() {
-  const { userProfile } = useAuth();
+  const { userProfile, companyCurrency } = useAuth();
   const { error } = useToast();
+  const { t } = useTranslation();
 
   const companyId = userProfile?.company_id;
 
@@ -104,7 +106,7 @@ export default function QuoteHistoryPage() {
       setLastDoc(result?.lastDoc || null);
     } catch (loadError) {
       console.error('[QuoteHistoryPage] Failed to load quotes', loadError);
-      error('Failed to load quote history.');
+      error(t('toast.loadFailed'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -127,55 +129,58 @@ export default function QuoteHistoryPage() {
     return quotes.filter((quote) => getClientName(quote).toLowerCase().includes(normalizedSearch));
   }, [quotes, searchTerm]);
 
+  const statusOptions = useMemo(
+    () =>
+      STATUS_VALUES.map((value) => ({
+        value,
+        label: value === 'all' ? t('status.allStatuses') : t(`status.${normalizeStatusKey(value)}`),
+      })),
+    [t]
+  );
+
   const columns = useMemo(
     () => [
       {
         key: 'clientName',
-        label: 'Client Name',
+        label: t('common.client'),
         render: (row) => getClientName(row),
       },
       {
         key: 'date',
-        label: 'Date',
+        label: t('common.date'),
         render: (row) => getQuoteDate(row),
       },
       {
         key: 'total',
-        label: 'Total Price',
-        render: (row) =>
-          new Intl.NumberFormat(undefined, {
-            style: 'currency',
-            currency: row.currency || 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }).format(getQuoteTotal(row)),
+        label: t('common.total'),
+        render: (row) => formatCurrency(getQuoteTotal(row), companyCurrency || row.currency || 'USD'),
       },
       {
         key: 'status',
-        label: 'Status',
+        label: t('common.status'),
         render: (row) => {
           const normalizedStatus = String(row.status || 'draft').toLowerCase();
 
           return (
             <Badge variant={statusBadgeVariant[normalizedStatus] || 'neutral'}>
-              {normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)}
+              {t(`status.${normalizeStatusKey(normalizedStatus)}`)}
             </Badge>
           );
         },
       },
       {
         key: 'actions',
-        label: 'Actions',
+        label: t('common.actions'),
         render: (row) => (
           <Link to={`/quotes/${row.id}`}>
             <Button size="sm" variant="secondary">
-              View
+              {t('common.view')}
             </Button>
           </Link>
         ),
       },
     ],
-    []
+    [companyCurrency, t]
   );
 
   const hasQuotes = filteredQuotes.length > 0;
@@ -183,27 +188,27 @@ export default function QuoteHistoryPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Quote History">
+      <Card title={t('quotes.history.title')}>
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Select
               id="quote-status-filter"
-              label="Status"
+              label={t('common.status')}
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              options={STATUS_OPTIONS}
+              options={statusOptions}
             />
             <Input
               id="quote-search"
-              label="Search by Client"
+              label={t('common.search')}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Type client name"
+              placeholder={t('quotes.history.searchByClient')}
             />
           </div>
 
           <Link to="/quotes/new">
-            <Button>New Quote</Button>
+            <Button>{t('common.newQuote')}</Button>
           </Link>
         </div>
 
@@ -222,14 +227,14 @@ export default function QuoteHistoryPage() {
                   loading={loadingMore}
                   onClick={() => loadQuotes({ append: true, cursor: lastDoc })}
                 >
-                  Load More
+                  {t('common.loadMore')}
                 </Button>
               </div>
             )}
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center">
-            <p className="text-sm text-gray-600">No quotes found for the selected filters.</p>
+            <p className="text-sm text-gray-600">{t('quotes.history.noQuotes')}</p>
           </div>
         )}
       </Card>

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { login } = useAuth();
 
   const [form, setForm] = useState({
@@ -35,8 +37,8 @@ export default function LoginPage() {
   const validate = () => {
     const nextErrors = {};
 
-    if (!form.email.trim()) nextErrors.email = 'Email is required';
-    if (!form.password) nextErrors.password = 'Password is required';
+    if (!form.email.trim()) nextErrors.email = t('validation.emailRequired');
+    if (!form.password) nextErrors.password = t('validation.passwordRequired');
 
     setErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
@@ -62,8 +64,8 @@ export default function LoginPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-900">Sign In</h1>
-      <p className="mt-1 text-sm text-slate-600">Access your 3DPrintCalc Pro workspace.</p>
+      <h1 className="text-2xl font-bold text-slate-900">{t('auth.signIn')}</h1>
+      <p className="mt-1 text-sm text-slate-600">{t('auth.signInSubtitle')}</p>
 
       <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
         <Input
@@ -71,7 +73,7 @@ export default function LoginPage() {
           name="email"
           type="email"
           autoComplete="email"
-          label="Email"
+          label={t('auth.email')}
           value={form.email}
           onChange={handleChange}
           error={errors.email}
@@ -82,7 +84,7 @@ export default function LoginPage() {
           name="password"
           type="password"
           autoComplete="current-password"
-          label="Password"
+          label={t('auth.password')}
           value={form.password}
           onChange={handleChange}
           error={errors.password}
@@ -95,14 +97,14 @@ export default function LoginPage() {
         )}
 
         <Button type="submit" variant="primary" loading={submitting} disabled={submitting} className="w-full">
-          Sign In
+          {t('auth.signInButton')}
         </Button>
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-600">
-        Don&apos;t have an account?{' '}
+        {t('auth.noAccount')}{' '}
         <Link to="/register" className="font-medium text-indigo-600 hover:text-indigo-500">
-          Register
+          {t('auth.register')}
         </Link>
       </p>
     </div>

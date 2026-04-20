@@ -1,9 +1,15 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatCurrency } from './currency';
+import i18n from '../i18n';
 
 function toNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
 }
 
 function resolveCurrency(companyData) {
@@ -12,15 +18,6 @@ function resolveCurrency(companyData) {
     companyData?.currency ||
     'USD'
   );
-}
-
-function formatCurrency(value, currency) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toNumber(value));
 }
 
 function getQuoteDate(quoteData) {
@@ -146,14 +143,10 @@ function normalizeFileDataArray(quote) {
   return fileDataArray;
 }
 
-function resolveEstimatedGrams(fileData) {
-  const estimatedGrams = toNumber(fileData?.estimatedGrams);
-  if (estimatedGrams > 0) {
-    return estimatedGrams;
-  }
-
-  const volumeCm3 = toNumber(fileData?.volumeCm3);
-  return volumeCm3 > 0 ? volumeCm3 * 1.24 : 0;
+function stripKnownModelExtension(fileName) {
+  const raw = String(fileName || '').trim();
+  if (!raw) return '';
+  return raw.replace(/\.(3mf|stl)$/i, '');
 }
 
 function resolveBreakdown(quoteData) {
@@ -175,6 +168,14 @@ function resolveBreakdown(quoteData) {
       materialCost + electricityCost + amortizationCost + extraCosts.reduce((sum, item) => sum + toNumber(item?.amount), 0)
   );
   const profitAmount = toNumber(breakdown.profitAmount ?? quoteData?.profitAmount);
+  const priceBeforeDiscount = toNumber(
+    breakdown.priceBeforeDiscount ??
+      quoteData?.priceBeforeDiscount ??
+      subtotal + profitAmount
+  );
+  const discountAmount = toNumber(breakdown.discountAmount);
+  const taxRate = toNumber(breakdown.taxRate ?? quoteData?.tax_rate ?? 0);
+  const taxAmount = toNumber(breakdown.taxAmount);
   const totalPrice = toNumber(breakdown.totalPrice ?? quoteData?.total_price ?? quoteData?.totalPrice ?? subtotal + profitAmount);
 
   return {
@@ -184,17 +185,18 @@ function resolveBreakdown(quoteData) {
     extraCosts,
     subtotal,
     profitAmount,
+    priceBeforeDiscount,
+    discountAmount,
+    taxRate,
+    taxAmount,
     totalPrice,
   };
 }
 
-function resolvePrintInfo(quoteData) {
-  const printHours = toNumber(quoteData?.print_hours ?? quoteData?.printHours ?? quoteData?.totalPrintHours);
+function resolvePartsInfo(quoteData) {
   const fileDataArray = normalizeFileDataArray(quoteData);
   const normalizedFiles = fileDataArray.map((file, index) => ({
-    name: file?.fileName || file?.name || `File ${index + 1}`,
-    type: file?.fileType || file?.type || 'N/A',
-    estimatedGrams: resolveEstimatedGrams(file),
+    name: stripKnownModelExtension(file?.fileName || file?.name || file?.filename || `Part ${index + 1}`),
     partCount: toNumber(file?.partCount),
   }));
   const partsFromFiles = normalizedFiles.reduce((sum, file) => sum + file.partCount, 0);
@@ -207,7 +209,6 @@ function resolvePrintInfo(quoteData) {
   );
 
   return {
-    printHours,
     partCount,
     files: normalizedFiles,
   };
@@ -226,7 +227,7 @@ export async function generateQuotePDF(quoteData, companyData) {
 
   const materials = resolveMaterials(quoteData);
   const breakdown = resolveBreakdown(quoteData);
-  const printInfo = resolvePrintInfo(quoteData);
+  const partsInfo = resolvePartsInfo(quoteData);
 
   const logoUrl = companyData?.logo_url;
   const photoUrl = quoteData?.photo_url || quoteData?.photoUrl;
@@ -261,24 +262,30 @@ export async function generateQuotePDF(quoteData, companyData) {
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text('3D Printing Quote', pageWidth - marginX, cursorY + 36, { align: 'right' });
+  doc.text(i18n.t('document.title'), pageWidth - marginX, cursorY + 36, { align: 'right' });
 
   // Move cursor below whichever is taller: logo or text header
   cursorY += Math.max(logoActualHeight + 16, 70);
 
   doc.setDrawColor(220);
-  doc.roundedRect(marginX, cursorY, pageWidth - marginX * 2, 72, 6, 6);
+  const estimatedDeliveryDays = toNumber(quoteData?.estimated_delivery_days);
+  const hasEstimatedDelivery = estimatedDeliveryDays > 0;
+  const infoBoxHeight = hasEstimatedDelivery ? 90 : 72;
+  doc.roundedRect(marginX, cursorY, pageWidth - marginX * 2, infoBoxHeight, 6, 6);
 
   doc.setFontSize(11);
-  doc.text(`Quote Date: ${formatDate(quoteDate)}`, marginX + 12, cursorY + 22);
-  doc.text(`Expiration Date: ${formatDate(expirationDate)}`, marginX + 12, cursorY + 40);
-  doc.text(`Client: ${clientName}`, marginX + 12, cursorY + 58);
+  doc.text(`${i18n.t('document.quoteDate')}: ${formatDate(quoteDate)}`, marginX + 12, cursorY + 22);
+  doc.text(`${i18n.t('document.expirationDate')}: ${formatDate(expirationDate)}`, marginX + 12, cursorY + 40);
+  doc.text(`${i18n.t('document.client')}: ${clientName}`, marginX + 12, cursorY + 58);
+  if (hasEstimatedDelivery) {
+    doc.text(`${i18n.t('document.estimatedDelivery')}: ${estimatedDeliveryDays} ${i18n.t('document.days')}`, marginX + 12, cursorY + 76);
+  }
 
-  cursorY += 90;
+  cursorY += infoBoxHeight + 18;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.text('Materials', marginX, cursorY);
+  doc.text(i18n.t('document.materials'), marginX, cursorY);
 
   const hasMaterialColor = materials.some((material) => String(material.color || '').trim());
 
@@ -286,8 +293,8 @@ export async function generateQuotePDF(quoteData, companyData) {
     startY: cursorY + 8,
     head: [
       hasMaterialColor
-        ? ['Material', 'Color', 'Weight (g)']
-        : ['Material', 'Weight (g)'],
+        ? [i18n.t('document.material'), i18n.t('document.color'), i18n.t('document.grams')]
+        : [i18n.t('document.material'), i18n.t('document.grams')],
     ],
     body: materials.map((material) => {
       if (hasMaterialColor) {
@@ -314,65 +321,111 @@ export async function generateQuotePDF(quoteData, companyData) {
     margin: { left: marginX, right: marginX },
   });
 
-  cursorY = (doc.lastAutoTable?.finalY || cursorY + 20) + 24;
+  cursorY = (doc.lastAutoTable?.finalY || cursorY + 20) + 16;
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(`Total: ${formatCurrency(breakdown.totalPrice, currency)}`, marginX, cursorY);
-
-  cursorY += 24;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  const purgeNote = i18n.t('document.purgeNote');
+  const purgeNoteLines = doc.splitTextToSize(purgeNote, pageWidth - marginX * 2);
+  doc.text(purgeNoteLines, marginX, cursorY);
+  doc.setTextColor(0, 0, 0);
+  cursorY += purgeNoteLines.length * 10 + 10;
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.text('Print Info', marginX, cursorY);
-
-  const printerSnapshot = quoteData?.printer_snapshot;
-  if (printerSnapshot) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.text('Printer', marginX, cursorY + 18);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    const printerText = `${printerSnapshot.name}${printerSnapshot.brand ? ` (${printerSnapshot.brand})` : ''} - ${printerSnapshot.type || 'N/A'}, ${printerSnapshot.wattage || 0}W`;
-    doc.text(printerText, marginX, cursorY + 32);
-    cursorY += 22;
-  }
+  doc.text(i18n.t('document.parts'), marginX, cursorY);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  doc.text(`Total print time (hours): ${printInfo.printHours.toFixed(2)}`, marginX, cursorY + 18);
-  doc.text(`Number of parts: ${printInfo.partCount || 0}`, marginX, cursorY + 34);
-  let fileInfoCursorY = cursorY + 50;
-  if (printInfo.files.length === 1) {
-    const singleFile = printInfo.files[0];
-    doc.text(
-      `File: ${singleFile.name} (${singleFile.type}) - Filament: ${singleFile.estimatedGrams.toFixed(2)} g`,
-      marginX,
-      fileInfoCursorY
-    );
-    fileInfoCursorY += 16;
-  } else if (printInfo.files.length > 1) {
+  const totalPartCount = partsInfo.partCount || partsInfo.files.length;
+  doc.text(`${i18n.t('document.partCount')}: ${totalPartCount}`, marginX, cursorY + 18);
+
+  const partRows = partsInfo.files.length > 0
+    ? partsInfo.files.map((file, index) => [file.name || `Part ${index + 1}`])
+    : [[i18n.t('document.noParts')]];
+
+  autoTable(doc, {
+    startY: cursorY + 26,
+    head: [[i18n.t('document.parts')]],
+    body: partRows,
+    styles: {
+      fontSize: 10,
+      cellPadding: 6,
+    },
+    headStyles: {
+      fillColor: [31, 41, 55],
+      textColor: 255,
+    },
+    margin: { left: marginX, right: marginX },
+  });
+
+  cursorY = (doc.lastAutoTable?.finalY || cursorY + 40) + 16;
+
+  const discount = quoteData.discount || (quoteData.discount_percent ? {
+    type: 'percentage',
+    value: quoteData.discount_percent,
+    note: quoteData.discount_note,
+  } : null);
+  const discountAmount = toNumber(quoteData.cost_breakdown?.discountAmount ?? breakdown.discountAmount ?? 0);
+  const discountType = String(discount?.type || '').toLowerCase();
+  const discountValue = toNumber(discount?.value);
+  const discountLabel = discountType === 'percentage'
+    ? i18n.t('document.discountPercentage', { value: discountValue })
+    : i18n.t('document.discountFixed');
+  const discountNote = String(discount?.note || '').trim();
+  const taxRate = toNumber(breakdown.taxRate ?? quoteData?.tax_rate ?? 0);
+  const taxAmount = toNumber(breakdown.taxAmount);
+  const baseSubtotal = toNumber(breakdown.priceBeforeDiscount) || toNumber(breakdown.subtotal + breakdown.profitAmount);
+  const hasDiscount = Boolean(discount) && discountAmount > 0;
+  const hasTax = taxAmount > 0 || taxRate > 0;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text(i18n.t('document.pricing'), marginX, cursorY);
+  cursorY += 18;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11);
+
+  if (!hasDiscount && !hasTax) {
     doc.setFont('helvetica', 'bold');
-    doc.text('Files', marginX, fileInfoCursorY);
-    fileInfoCursorY += 16;
-
+    doc.text(`${i18n.t('document.total')}: ${formatCurrency(breakdown.totalPrice, currency)}`, marginX, cursorY);
     doc.setFont('helvetica', 'normal');
-    printInfo.files.forEach((file) => {
-      doc.text(
-        `- ${file.name} (${file.type}) | Filament: ${file.estimatedGrams.toFixed(2)} g`,
-        marginX,
-        fileInfoCursorY
-      );
-      fileInfoCursorY += 14;
-    });
-  }
+    cursorY += 20;
+  } else {
+    doc.text(`${i18n.t('document.subtotal')}: ${formatCurrency(baseSubtotal, currency)}`, marginX, cursorY);
+    cursorY += 16;
 
-  cursorY = fileInfoCursorY + 6;
+    if (hasDiscount) {
+      doc.text(
+        `${discountLabel}: -${formatCurrency(discountAmount, currency)}`,
+        marginX,
+        cursorY
+      );
+      cursorY += 16;
+    }
+
+    if (discountNote) {
+      doc.text(`${i18n.t('document.discountNote')}: "${discountNote}"`, marginX, cursorY);
+      cursorY += 16;
+    }
+
+    if (hasTax) {
+      doc.text(`${i18n.t('document.taxIva', { value: taxRate })}: ${formatCurrency(taxAmount, currency)}`, marginX, cursorY);
+      cursorY += 16;
+    }
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${i18n.t('document.total')}: ${formatCurrency(breakdown.totalPrice, currency)}`, marginX, cursorY);
+    doc.setFont('helvetica', 'normal');
+    cursorY += 20;
+  }
 
   if (designUrl) {
     doc.setTextColor(37, 99, 235);
     doc.setFont('helvetica', 'normal');
-    doc.textWithLink('Click to see design', marginX, cursorY, { url: String(designUrl) });
+    doc.textWithLink(i18n.t('document.designLink'), marginX, cursorY, { url: String(designUrl) });
     doc.setTextColor(0, 0, 0);
     cursorY += 22;
   }
@@ -381,7 +434,7 @@ export async function generateQuotePDF(quoteData, companyData) {
   if (notes) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.text('Notes', marginX, cursorY);
+    doc.text(i18n.t('document.notes'), marginX, cursorY);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     const noteLines = doc.splitTextToSize(notes, pageWidth - marginX * 2);
@@ -404,7 +457,7 @@ export async function generateQuotePDF(quoteData, companyData) {
 
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0, 0, 0);
-      doc.text('Product Photo', marginX, cursorY);
+      doc.text(i18n.t('document.productPhoto'), marginX, cursorY);
       cursorY += 10;
       doc.addImage(photoBase64, marginX, cursorY, photoWidth, photoHeight);
       cursorY += photoHeight + 20;
@@ -419,18 +472,18 @@ export async function generateQuotePDF(quoteData, companyData) {
   }
 
   doc.setFont('helvetica', 'bold');
-  doc.text('Payment Terms', marginX, cursorY);
+  doc.text(i18n.t('document.paymentTerms'), marginX, cursorY);
   doc.setFont('helvetica', 'normal');
-  doc.text('A 50% upfront deposit is required to start the order.', marginX, cursorY + 18);
+  doc.text(i18n.t('document.paymentTermsText'), marginX, cursorY + 18);
 
   const generatedAt = new Date();
   const footerY = pageHeight - 46;
 
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
-  doc.text(`Generated: ${generatedAt.toLocaleString()}`, marginX, footerY);
+  doc.text(`${i18n.t('document.generated')}: ${generatedAt.toLocaleString()}`, marginX, footerY);
   doc.text(
-    'This quote is valid for 30 days from the date of issue.',
+    i18n.t('document.validityNote'),
     pageWidth - marginX,
     footerY,
     { align: 'right' }

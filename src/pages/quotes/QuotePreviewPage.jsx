@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
+import { useTranslation } from 'react-i18next';
 import { saveAs } from 'file-saver';
 import CostBreakdown from '../../components/CostBreakdown';
 import { Badge } from '../../components/ui/Badge';
@@ -12,17 +13,13 @@ import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { generateQuoteDocx } from '../../lib/docxGenerator';
+import { formatCurrency } from '../../lib/currency';
 import { db } from '../../lib/firebase';
 import { getOrderByQuoteId, createOrderFromQuote } from '../../lib/orders';
 import { generateQuotePDF } from '../../lib/pdfGenerator';
 import { deleteQuote, getQuote, updateQuote } from '../../lib/quotes';
 
-const STATUS_OPTIONS = [
-  { label: 'Draft', value: 'draft' },
-  { label: 'Sent', value: 'sent' },
-  { label: 'Accepted', value: 'accepted' },
-  { label: 'Rejected', value: 'rejected' },
-];
+const STATUS_VALUES = ['draft', 'sent', 'accepted', 'rejected'];
 
 const STATUS_BADGE_VARIANT = {
   draft: 'neutral',
@@ -69,18 +66,10 @@ function formatDate(value) {
   return date.toLocaleDateString();
 }
 
-function formatCurrency(value, currency = 'USD') {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(toNumber(value));
-}
-
-function statusLabel(status) {
-  const normalized = String(status || 'draft').toLowerCase();
-  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+function normalizeStatusKey(status) {
+  return String(status || 'draft')
+    .toLowerCase()
+    .replace(/_([a-z])/g, (_, char) => char.toUpperCase());
 }
 
 function getClientName(quote) {
@@ -166,6 +155,20 @@ function getBreakdown(quote) {
     raw.subtotal ?? quote?.subtotal ?? materialCost + electricityCost + amortizationCost + extraCostsTotal
   );
   const profitAmount = toNumber(raw.profitAmount ?? quote?.profit_amount ?? quote?.profitAmount);
+  const priceBeforeDiscount = toNumber(raw.priceBeforeDiscount ?? subtotal + profitAmount);
+  const discount =
+    raw.discount ||
+    quote?.discount ||
+    (quote?.discount_percent
+      ? {
+          type: 'percentage',
+          value: toNumber(quote.discount_percent),
+        }
+      : undefined);
+  const discountAmount = toNumber(raw.discountAmount ?? quote?.discount_amount);
+  const priceAfterDiscount = toNumber(raw.priceAfterDiscount ?? priceBeforeDiscount - discountAmount);
+  const taxRate = toNumber(raw.taxRate ?? quote?.tax_rate);
+  const taxAmount = toNumber(raw.taxAmount ?? quote?.tax_amount);
   const totalPrice = toNumber(raw.totalPrice ?? quote?.total_price ?? quote?.totalPrice ?? subtotal + profitAmount);
 
   return {
@@ -177,6 +180,12 @@ function getBreakdown(quote) {
     subtotal,
     profitMarginPercent: toNumber(raw.profitMarginPercent),
     profitAmount,
+    priceBeforeDiscount,
+    discount,
+    discountAmount,
+    priceAfterDiscount,
+    taxRate,
+    taxAmount,
     totalPrice,
   };
 }
@@ -196,6 +205,7 @@ export default function QuotePreviewPage() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const { error, success, info } = useToast();
+  const { t } = useTranslation();
 
   const [quote, setQuote] = useState(null);
   const [company, setCompany] = useState(null);
@@ -222,7 +232,7 @@ export default function QuotePreviewPage() {
         const quoteData = await getQuote(id);
 
         if (!quoteData) {
-          info('Quote not found.');
+          info(t('quotes.history.noQuotes'));
           if (!cancelled) {
             setQuote(null);
             setCompany(null);
@@ -254,7 +264,7 @@ export default function QuotePreviewPage() {
       } catch (loadError) {
         console.error('[QuotePreviewPage] Failed to load quote preview data', loadError);
         if (!cancelled) {
-          error('Failed to load quote preview.');
+          error(t('toast.loadFailed'));
         }
       } finally {
         if (!cancelled) {
@@ -268,7 +278,7 @@ export default function QuotePreviewPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, userProfile?.company_id, navigate, error, info]);
+  }, [id, userProfile?.company_id, navigate, error, info, t]);
 
   const currency = useMemo(() => getCurrency(quote, company), [quote, company]);
   const clientName = useMemo(() => getClientName(quote), [quote]);
@@ -277,6 +287,14 @@ export default function QuotePreviewPage() {
   const expirationDate = useMemo(() => getExpirationDate(quote), [quote]);
   const materials = useMemo(() => getMaterials(quote), [quote]);
   const breakdown = useMemo(() => getBreakdown(quote), [quote]);
+  const statusOptions = useMemo(
+    () =>
+      STATUS_VALUES.map((value) => ({
+        value,
+        label: t(`status.${normalizeStatusKey(value)}`),
+      })),
+    [t]
+  );
   const printHours = useMemo(() => getPrintHours(quote), [quote]);
   const partCount = useMemo(() => getPartCount(quote), [quote]);
   const fileDataArray = useMemo(
@@ -320,10 +338,10 @@ export default function QuotePreviewPage() {
     try {
       await updateQuote(quote.id, { status: nextStatus });
       setQuote((prev) => ({ ...prev, status: nextStatus }));
-      success('Quote status updated.');
+      success(t('toast.statusUpdated'));
     } catch (updateError) {
       console.error('[QuotePreviewPage] Failed to update status', updateError);
-      error('Failed to update quote status.');
+      error(t('toast.saveFailed'));
     } finally {
       setUpdatingStatus(false);
     }
@@ -339,10 +357,10 @@ export default function QuotePreviewPage() {
     try {
       const blob = await generateQuotePDF(quote, company || {});
       saveAs(blob, `quote-${sanitizeFileName(clientName)}.pdf`);
-      success('PDF downloaded successfully.');
+      success(t('toast.saveSuccess'));
     } catch (downloadError) {
       console.error('[QuotePreviewPage] Failed to generate PDF', downloadError);
-      error('Failed to generate PDF.');
+      error(t('toast.saveFailed'));
     } finally {
       setGeneratingPdf(false);
     }
@@ -355,7 +373,7 @@ export default function QuotePreviewPage() {
     try {
       // Fast path: check if quote already has an order_id stamped on it
       if (quote.order_id) {
-        info('An order already exists for this quote.');
+        info(t('toast.orderCreated'));
         navigate('/orders/' + quote.order_id);
         return;
       }
@@ -363,18 +381,18 @@ export default function QuotePreviewPage() {
       // Fallback: query orders collection (for orders created before the order_id stamp)
       const existingOrder = await getOrderByQuoteId(quote.id, userProfile.company_id);
       if (existingOrder) {
-        info('An order already exists for this quote.');
+        info(t('toast.orderCreated'));
         navigate('/orders/' + existingOrder.id);
         return;
       }
 
       // Create new order
       const orderId = await createOrderFromQuote(quote, userProfile.company_id, company || {});
-      success('Order created successfully!');
+      success(t('toast.orderCreated'));
       navigate('/orders/' + orderId);
     } catch (createError) {
       console.error('[QuotePreviewPage] Failed to create order', createError);
-      error('Failed to create order.');
+      error(t('toast.saveFailed'));
     } finally {
       setCreatingOrder(false);
     }
@@ -390,10 +408,10 @@ export default function QuotePreviewPage() {
     try {
       const blob = await generateQuoteDocx(quote, company || {});
       saveAs(blob, `quote-${sanitizeFileName(clientName)}.docx`);
-      success('DOCX downloaded successfully.');
+      success(t('toast.saveSuccess'));
     } catch (downloadError) {
       console.error('[QuotePreviewPage] Failed to generate DOCX', downloadError);
-      error('Failed to generate DOCX.');
+      error(t('toast.saveFailed'));
     } finally {
       setGeneratingDocx(false);
     }
@@ -408,11 +426,11 @@ export default function QuotePreviewPage() {
 
     try {
       await deleteQuote(quote.id);
-      success('Quote deleted successfully.');
+      success(t('toast.quoteDeleted'));
       navigate('/quotes');
     } catch (deleteError) {
       console.error('[QuotePreviewPage] Failed to delete quote', deleteError);
-      error('Failed to delete quote.');
+      error(t('toast.deleteFailed'));
     } finally {
       setDeleting(false);
       setIsDeleteModalOpen(false);
@@ -429,11 +447,11 @@ export default function QuotePreviewPage() {
 
   if (!quote) {
     return (
-      <Card title="Quote Preview">
+      <Card title={t('quotes.preview.title')}>
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">The requested quote was not found.</p>
+          <p className="text-sm text-gray-600">{t('quotes.history.noQuotes')}</p>
           <Link to="/quotes">
-            <Button variant="secondary">Back to Quote History</Button>
+            <Button variant="secondary">{t('quotes.history.title')}</Button>
           </Link>
         </div>
       </Card>
@@ -446,18 +464,18 @@ export default function QuotePreviewPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <Link to="/quotes">
-              <Button variant="secondary">Back</Button>
+              <Button variant="secondary">{t('common.back')}</Button>
             </Link>
 
             <Badge variant={STATUS_BADGE_VARIANT[String(quote.status || 'draft').toLowerCase()] || 'neutral'}>
-              {statusLabel(quote.status)}
+              {t(`status.${normalizeStatusKey(quote.status)}`)}
             </Badge>
 
             <Select
               id="quote-status"
               value={quote.status || 'draft'}
               onChange={handleStatusChange}
-              options={STATUS_OPTIONS}
+              options={statusOptions}
               className="min-w-[180px]"
               disabled={updatingStatus}
             />
@@ -468,22 +486,22 @@ export default function QuotePreviewPage() {
                 loading={creatingOrder}
                 disabled={generatingPdf || generatingDocx || deleting}
               >
-                Create Order
+                {t('quotes.preview.createOrder')}
               </Button>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <Button variant="secondary" onClick={() => navigate(`/quotes/new?edit=${quote.id}`)}>
-              Edit
+              {t('quotes.preview.edit')}
             </Button>
 
             <Button variant="secondary" onClick={() => navigate(`/quotes/new?duplicate=${quote.id}`)}>
-              Duplicate
+              {t('quotes.preview.duplicate')}
             </Button>
 
             <Button onClick={handleDownloadPdf} loading={generatingPdf} disabled={generatingDocx || deleting}>
-              Download PDF
+              {generatingPdf ? t('quotes.preview.generatingPDF') : t('quotes.preview.exportPDF')}
             </Button>
 
             <Button
@@ -492,11 +510,11 @@ export default function QuotePreviewPage() {
               loading={generatingDocx}
               disabled={generatingPdf || deleting}
             >
-              Download DOCX
+              {generatingDocx ? t('quotes.preview.generatingDOCX') : t('quotes.preview.exportDOCX')}
             </Button>
 
             <Button variant="danger" onClick={() => setIsDeleteModalOpen(true)} disabled={deleting}>
-              Delete
+              {t('quotes.preview.delete')}
             </Button>
           </div>
         </div>
@@ -522,23 +540,24 @@ export default function QuotePreviewPage() {
 
             <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
               <p>
-                <span className="font-medium text-gray-900">Quote Date:</span> {formatDate(quoteDate)}
+                <span className="font-medium text-gray-900">{t('quotes.preview.date')}:</span> {formatDate(quoteDate)}
               </p>
               <p>
-                <span className="font-medium text-gray-900">Expiration:</span> {formatDate(expirationDate)}
+                <span className="font-medium text-gray-900">{t('quotes.preview.expiration')}:</span> {formatDate(expirationDate)}
               </p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-4 rounded-md border border-gray-200 bg-gray-50 p-4 md:grid-cols-2">
             <p className="text-sm text-gray-700">
-              <span className="font-medium text-gray-900">Client:</span> {clientName}
+              <span className="font-medium text-gray-900">{t('quotes.preview.client')}:</span> {clientName}
             </p>
             <p className="text-sm text-gray-700">
-              <span className="font-medium text-gray-900">Status:</span> {statusLabel(quote.status)}
+              <span className="font-medium text-gray-900">{t('common.status')}:</span>{' '}
+              {t(`status.${normalizeStatusKey(quote.status)}`)}
             </p>
             <p className="text-sm text-gray-700 md:col-span-2">
-              <span className="font-medium text-gray-900">Design URL:</span>{' '}
+              <span className="font-medium text-gray-900">{t('quotes.preview.designLink')}:</span>{' '}
               {designUrl ? (
                 <a
                   href={designUrl}
@@ -549,13 +568,19 @@ export default function QuotePreviewPage() {
                   {designUrl}
                 </a>
               ) : (
-                'Not provided'
+                t('common.noData')
               )}
             </p>
+            {toNumber(quote?.estimated_delivery_days) > 0 ? (
+              <p className="text-sm text-gray-700 md:col-span-2">
+                <span className="font-medium text-gray-900">{t('quotes.preview.estimatedDelivery')}:</span>{' '}
+                {quote.estimated_delivery_days} {t('quotes.preview.days')}
+              </p>
+            ) : null}
           </div>
 
           <section className="space-y-3">
-            <h3 className="text-lg font-semibold text-gray-900">Materials</h3>
+            <h3 className="text-lg font-semibold text-gray-900">{t('quotes.preview.materials')}</h3>
             <div className="overflow-x-auto rounded-md border border-gray-200">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -619,27 +644,14 @@ export default function QuotePreviewPage() {
 
             <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
               <h3 className="text-base font-semibold text-gray-900">Print Details</h3>
-              {quote?.printer_snapshot && (
-                <div className="grid grid-cols-2 gap-2 text-sm text-gray-700 sm:grid-cols-4">
-                  <p>
-                    <span className="font-medium text-gray-900">Printer:</span> {quote.printer_snapshot.name}
-                  </p>
-                  {quote.printer_snapshot.brand && (
-                    <p>
-                      <span className="font-medium text-gray-900">Brand:</span> {quote.printer_snapshot.brand}
-                    </p>
-                  )}
-                  <p>
-                    <span className="font-medium text-gray-900">Type:</span> {quote.printer_snapshot.type || 'N/A'}
-                  </p>
-                  <p>
-                    <span className="font-medium text-gray-900">Wattage:</span> {quote.printer_snapshot.wattage || 0}W
-                  </p>
-                </div>
-              )}
+              {quote?.printer_snapshot?.name ? (
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium text-gray-900">Printer:</span> {quote.printer_snapshot.name}
+                </p>
+              ) : null}
               {normalizedFileData.length === 1 ? (
                 <div className="text-sm text-gray-700">
-                  <span className="font-medium text-gray-900">Imported File:</span>{' '}
+                  <span className="font-medium text-gray-900">{t('quotes.preview.files')}:</span>{' '}
                   <span>{normalizedFileData[0].name}</span>{' '}
                   <Badge variant="neutral" className="align-middle">
                     {normalizedFileData[0].type}
@@ -651,7 +663,7 @@ export default function QuotePreviewPage() {
                 </div>
               ) : normalizedFileData.length > 1 ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-gray-900">Imported Files</p>
+                  <p className="text-sm font-medium text-gray-900">{t('quotes.preview.files')}</p>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {normalizedFileData.map((file, index) => (
                       <div
@@ -672,14 +684,15 @@ export default function QuotePreviewPage() {
                 </div>
               ) : null}
               <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Estimated Print Time:</span>{' '}
+                <span className="font-medium text-gray-900">{t('quotes.preview.printHours')}:</span>{' '}
                 {printHours > 0 ? `${printHours.toFixed(2)} h` : 'N/A'}
               </p>
               <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Parts Count:</span> {partCount > 0 ? partCount : 'N/A'}
+                <span className="font-medium text-gray-900">{t('quotes.preview.partCount')}:</span>{' '}
+                {partCount > 0 ? partCount : 'N/A'}
               </p>
               <p className="text-sm text-gray-700">
-                <span className="font-medium text-gray-900">Total Quote:</span>{' '}
+                <span className="font-medium text-gray-900">{t('common.total')}:</span>{' '}
                 {formatCurrency(breakdown.totalPrice, currency)}
               </p>
             </div>
@@ -687,7 +700,7 @@ export default function QuotePreviewPage() {
 
           {quote.photo_url ? (
             <section className="space-y-3">
-              <h3 className="text-lg font-semibold text-gray-900">Product Photo</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{t('quotes.preview.referencePhoto')}</h3>
               <img
                 src={quote.photo_url}
                 alt="Product preview"
@@ -700,26 +713,25 @@ export default function QuotePreviewPage() {
             <h3 className="text-base font-semibold text-blue-900">Payment Terms</h3>
             <p className="text-sm text-blue-800">A 50% upfront deposit is required to start the order.</p>
             <p className="text-sm text-blue-700">
-              This quote is currently <strong>{statusLabel(quote.status).toLowerCase()}</strong> and valid until{' '}
+              This quote is currently <strong>{t(`status.${normalizeStatusKey(quote.status)}`).toLowerCase()}</strong> and valid until{' '}
               <strong>{formatDate(expirationDate)}</strong>.
             </p>
           </section>
         </div>
       </Card>
 
-      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Delete Quote">
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title={t('quotes.preview.delete')}>
         <div className="space-y-5">
           <p className="text-sm text-gray-700">
-            Are you sure you want to delete this quote for <span className="font-semibold">{clientName}</span>? This
-            action cannot be undone.
+            {t('quotes.preview.deleteConfirm')}
           </p>
 
           <div className="flex flex-wrap justify-end gap-3">
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)} disabled={deleting}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={handleDeleteQuote} loading={deleting}>
-              Delete Quote
+              {t('quotes.preview.delete')}
             </Button>
           </div>
         </div>

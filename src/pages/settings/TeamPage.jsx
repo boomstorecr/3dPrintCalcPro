@@ -7,6 +7,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useTranslation } from 'react-i18next';
 import {
   createInvite,
   deleteInvite,
@@ -54,6 +55,7 @@ function getRole(member) {
 export default function TeamPage() {
   const { user, userProfile } = useAuth();
   const { success, error, info } = useToast();
+  const { t } = useTranslation();
 
   const companyId = userProfile?.company_id;
   const isAdmin = userProfile?.role === 'Admin';
@@ -124,7 +126,7 @@ export default function TeamPage() {
     try {
       const code = await createInvite(companyId);
       setNewInviteCode(code);
-      success('Invite code generated successfully.');
+      success(t('toast.inviteGenerated'));
       await loadInvites();
     } catch (createError) {
       console.error('[TeamPage] Failed to create invite', createError);
@@ -142,7 +144,7 @@ export default function TeamPage() {
 
     try {
       await navigator.clipboard.writeText(codeToCopy);
-      success('Invite code copied to clipboard.');
+      success(t('toast.copySuccess'));
     } catch (copyError) {
       console.error('[TeamPage] Failed to copy invite code', copyError);
       error('Could not copy invite code.');
@@ -177,7 +179,7 @@ export default function TeamPage() {
 
     try {
       await removeTeamMember(pendingRemoveMember.id);
-      success('Team member removed from Firestore.');
+      success(t('toast.memberRemoved'));
       closeRemoveModal();
       await loadMembers();
     } catch (removeError) {
@@ -217,21 +219,21 @@ export default function TeamPage() {
     () => [
       {
         key: 'display_name',
-        label: 'Display Name',
+        label: t('common.name'),
         render: (row) => getDisplayName(row),
       },
       {
         key: 'role',
-        label: 'Role',
+        label: t('settings.team.role'),
         render: (row) => {
           const role = getRole(row);
           const variant = role === 'Admin' ? 'info' : 'neutral';
-          return <Badge variant={variant}>{role}</Badge>;
+          return <Badge variant={variant}>{role === 'Admin' ? t('settings.team.admin') : t('settings.team.worker')}</Badge>;
         },
       },
       {
         key: 'actions',
-        label: 'Actions',
+        label: t('common.actions'),
         render: (row) => {
           const isSelf = row.id === user?.uid;
 
@@ -241,20 +243,20 @@ export default function TeamPage() {
 
           return (
             <Button size="sm" variant="danger" onClick={() => handleOpenRemoveModal(row)}>
-              Remove
+              {t('settings.team.removeMember')}
             </Button>
           );
         },
       },
     ],
-    [user?.uid]
+    [t, user?.uid]
   );
 
   const inviteColumns = useMemo(
     () => [
       {
         key: 'code',
-        label: 'Code',
+        label: t('settings.team.invites'),
         render: (row) => (
           <div className="flex items-center gap-2">
             <span className="font-mono text-xs">{maskInviteCode(row.code)}</span>
@@ -263,24 +265,24 @@ export default function TeamPage() {
               variant="secondary"
               onClick={() => handleCopyInviteCode(row.code)}
             >
-              Copy
+              {t('settings.team.copyCode')}
             </Button>
           </div>
         ),
       },
       {
         key: 'status',
-        label: 'Status',
-        render: (row) => <Badge variant={row.used ? 'neutral' : 'success'}>{row.used ? 'Used' : 'Available'}</Badge>,
+        label: t('common.status'),
+        render: (row) => <Badge variant={row.used ? 'neutral' : 'success'}>{row.used ? t('settings.team.used') : t('settings.team.unused')}</Badge>,
       },
       {
         key: 'created_at',
-        label: 'Created',
+        label: t('common.date'),
         render: (row) => formatInviteDate(row),
       },
       {
         key: 'actions',
-        label: 'Actions',
+        label: t('common.actions'),
         render: (row) => (
           <Button
             size="sm"
@@ -288,17 +290,17 @@ export default function TeamPage() {
             onClick={() => handleDeleteInvite(row)}
             disabled={Boolean(row.used)}
           >
-            Delete
+            {t('settings.team.deleteInvite')}
           </Button>
         ),
       },
     ],
-    []
+    [t]
   );
 
   if (!isAdmin) {
     return (
-      <Card title="Team">
+      <Card title={t('settings.team.title')}>
         <p className="text-sm text-gray-600">Only administrators can manage team members and invites.</p>
       </Card>
     );
@@ -306,25 +308,27 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Current Team Members">
+      <Card title={t('settings.team.members')}>
         {loadingMembers ? (
           <div className="flex items-center justify-center py-10">
             <Spinner size="lg" />
           </div>
+        ) : members.length === 0 ? (
+          <p className="text-sm text-gray-600">{t('settings.team.noMembers')}</p>
         ) : (
           <Table columns={memberColumns} data={members} />
         )}
       </Card>
 
-      <Card title="Invite Worker">
+      <Card title={t('settings.team.invites')}>
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={handleGenerateInvite} loading={saving}>
-              Generate Invite Code
+              {t('settings.team.generateInvite')}
             </Button>
             {newInviteCode && (
               <Button variant="secondary" onClick={() => handleCopyInviteCode(newInviteCode)}>
-                Copy
+                {t('settings.team.copyCode')}
               </Button>
             )}
           </div>
@@ -340,25 +344,26 @@ export default function TeamPage() {
             <div className="flex items-center justify-center py-10">
               <Spinner size="lg" />
             </div>
+          ) : invites.length === 0 ? (
+            <p className="text-sm text-gray-600">{t('settings.team.noInvites')}</p>
           ) : (
             <Table columns={inviteColumns} data={invites} />
           )}
         </div>
       </Card>
 
-      <Modal isOpen={isRemoveModalOpen} onClose={closeRemoveModal} title="Remove Team Member">
+      <Modal isOpen={isRemoveModalOpen} onClose={closeRemoveModal} title={t('settings.team.removeMember')}>
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
-            Remove {getDisplayName(pendingRemoveMember || {})} from this company team? This only deletes their
-            Firestore user profile.
+            {t('settings.team.removeConfirm')} {getDisplayName(pendingRemoveMember || {})}?
           </p>
 
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={closeRemoveModal} disabled={saving}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={handleRemoveMember} loading={saving}>
-              Remove
+              {t('settings.team.removeMember')}
             </Button>
           </div>
         </div>

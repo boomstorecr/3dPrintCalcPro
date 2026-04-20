@@ -7,6 +7,8 @@ import { Button } from '../../components/ui/Button';
 import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
+import { useTranslation } from 'react-i18next';
+import { CURRENCY_OPTIONS } from '../../lib/currency';
 import { db } from '../../lib/firebase';
 
 function fileToBase64(file) {
@@ -18,25 +20,13 @@ function fileToBase64(file) {
   });
 }
 
-const CURRENCY_OPTIONS = [
-  { label: 'USD', value: 'USD' },
-  { label: 'EUR', value: 'EUR' },
-  { label: 'GBP', value: 'GBP' },
-  { label: 'MXN', value: 'MXN' },
-  { label: 'CRC - Colón', value: 'CRC' },
-  { label: 'BRL', value: 'BRL' },
-  { label: 'CAD', value: 'CAD' },
-  { label: 'AUD', value: 'AUD' },
-  { label: 'JPY', value: 'JPY' },
-  { label: 'CNY', value: 'CNY' },
-];
-
 const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024;
 const ALLOWED_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'];
 
 export default function CompanyProfilePage() {
   const { userProfile } = useAuth();
   const { success, error } = useToast();
+  const { t } = useTranslation();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -152,10 +142,10 @@ export default function CompanyProfilePage() {
 
       setLogoUrl(nextLogoUrl);
       setSelectedLogoFile(null);
-      success('Company profile updated successfully.');
+      success(t('toast.profileSaved'));
     } catch (saveError) {
       console.error('[CompanyProfilePage] Failed to save company profile', saveError);
-      error('Failed to save company profile.');
+      error(t('toast.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -163,8 +153,8 @@ export default function CompanyProfilePage() {
 
   if (!isAdmin) {
     return (
-      <Card title="Company Profile">
-        <p className="text-sm text-gray-600">Only administrators can edit company profile settings.</p>
+      <Card title={t('settings.profile.title')}>
+        <p className="text-sm text-gray-600">{t('settings.profile.adminOnly')}</p>
       </Card>
     );
   }
@@ -179,11 +169,11 @@ export default function CompanyProfilePage() {
 
   return (
     <div className="space-y-6">
-      <Card title="Company Profile">
+      <Card title={t('settings.profile.title')}>
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <Input
             id="company-name"
-            label="Company Name"
+            label={t('settings.profile.companyName')}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Enter company name"
@@ -191,7 +181,7 @@ export default function CompanyProfilePage() {
 
           <Select
             id="company-currency"
-            label="Currency"
+            label={t('settings.profile.currency')}
             value={currency}
             onChange={(event) => setCurrency(event.target.value)}
             options={CURRENCY_OPTIONS}
@@ -202,7 +192,7 @@ export default function CompanyProfilePage() {
           <Input
             id="company-logo"
             type="file"
-            label="Company Logo"
+            label={t('settings.profile.logo')}
             accept=".png,.jpg,.jpeg,.svg,image/png,image/jpeg,image/svg+xml"
             onChange={handleLogoChange}
           />
@@ -223,7 +213,7 @@ export default function CompanyProfilePage() {
 
         <div className="mt-6 flex justify-end">
           <Button onClick={handleSave} loading={saving}>
-            Save Changes
+            {saving ? t('settings.profile.saving') : t('settings.profile.save')}
           </Button>
         </div>
       </Card>

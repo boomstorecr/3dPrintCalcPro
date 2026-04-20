@@ -8,6 +8,7 @@ import { Spinner } from '../../components/ui/Spinner';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { useTranslation } from 'react-i18next';
+import { doc, updateDoc } from 'firebase/firestore';
 import {
   createInvite,
   deleteInvite,
@@ -15,6 +16,7 @@ import {
   getTeamMembers,
   removeTeamMember,
 } from '../../lib/team';
+import { db } from '../../lib/firebase';
 
 function maskInviteCode(code) {
   if (!code) {
@@ -215,6 +217,28 @@ export default function TeamPage() {
     }
   };
 
+  const handleRoleChange = async (memberId, newRole) => {
+    if (!memberId || !newRole) {
+      error(t('toast.saveFailed'));
+      return;
+    }
+
+    if (memberId === user?.uid) {
+      info(t('settings.team.cannotChangeOwnRole'));
+      return;
+    }
+
+    try {
+      const memberRef = doc(db, 'users', memberId);
+      await updateDoc(memberRef, { role: newRole });
+      setMembers((prev) => prev.map((member) => (member.id === memberId ? { ...member, role: newRole } : member)));
+      success(t('settings.team.roleUpdated'));
+    } catch (updateError) {
+      console.error('[TeamPage] Failed to update role', updateError);
+      error(t('toast.saveFailed'));
+    }
+  };
+
   const memberColumns = useMemo(
     () => [
       {
@@ -231,9 +255,25 @@ export default function TeamPage() {
         key: 'role',
         label: t('settings.team.role'),
         render: (row) => {
+          const isSelf = row.id === user?.uid;
           const role = getRole(row);
           const variant = role === 'Admin' ? 'info' : 'neutral';
-          return <Badge variant={variant}>{role === 'Admin' ? t('settings.team.admin') : t('settings.team.worker')}</Badge>;
+          const nextRole = role === 'Admin' ? 'Worker' : 'Admin';
+
+          return (
+            <div className="flex flex-col items-start gap-1">
+              <Badge variant={variant}>{role === 'Admin' ? t('settings.team.admin') : t('settings.team.worker')}</Badge>
+              {!isSelf && (
+                <button
+                  type="button"
+                  onClick={() => handleRoleChange(row.id, nextRole)}
+                  className="text-xs font-medium text-blue-600 transition-colors hover:text-blue-800"
+                >
+                  {role === 'Admin' ? t('settings.team.demoteToWorker') : t('settings.team.promoteToAdmin')}
+                </button>
+              )}
+            </div>
+          );
         },
       },
       {

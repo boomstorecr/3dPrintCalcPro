@@ -353,7 +353,14 @@ export default function QuotePreviewPage() {
 
     setCreatingOrder(true);
     try {
-      // Check if order already exists for this quote
+      // Fast path: check if quote already has an order_id stamped on it
+      if (quote.order_id) {
+        info('An order already exists for this quote.');
+        navigate('/orders/' + quote.order_id);
+        return;
+      }
+
+      // Fallback: query orders collection (for orders created before the order_id stamp)
       const existingOrder = await getOrderByQuoteId(quote.id, userProfile.company_id);
       if (existingOrder) {
         info('An order already exists for this quote.');

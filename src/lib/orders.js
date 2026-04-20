@@ -132,6 +132,9 @@ export async function createOrderFromQuote(quote, companyId, companyData) {
     updated_at: serverTimestamp(),
   });
 
+  const quoteRef = doc(db, 'quotes', quote.id);
+  batch.update(quoteRef, { order_id: orderRef.id });
+
   await batch.commit();
   return orderRef.id;
 }

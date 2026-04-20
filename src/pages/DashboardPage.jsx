@@ -26,52 +26,68 @@ export default function DashboardPage() {
     if (!userProfile?.company_id) return;
 
     const fetchDashboardData = async () => {
+      const companyId = userProfile.company_id;
+
+      let totalQuotes = 0;
+      let thisMonth = 0;
+      let revenue = 0;
+      let averageQuote = 0;
+
+      // 1. Total Quotes
       try {
-        const companyId = userProfile.company_id;
-        
-        // 1. Total Quotes
         const allQ = query(
-          collection(db, 'quotes'), 
+          collection(db, 'quotes'),
           where('company_id', '==', companyId)
         );
         const allSnap = await getDocs(allQ);
-        const totalQuotes = allSnap.size;
+        totalQuotes = allSnap.size;
+      } catch (err) {
+        console.error('Error fetching total quotes:', err);
+      }
 
-        // 2. This Month
+      // 2. This Month
+      try {
         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
         const monthQ = query(
-          collection(db, 'quotes'), 
-          where('company_id', '==', companyId), 
+          collection(db, 'quotes'),
+          where('company_id', '==', companyId),
           where('date', '>=', Timestamp.fromDate(startOfMonth))
         );
         const monthSnap = await getDocs(monthQ);
-        const thisMonth = monthSnap.size;
+        thisMonth = monthSnap.size;
+      } catch (err) {
+        console.error('Error fetching this month quotes:', err);
+      }
 
-        // 3. Accepted Quotes & Revenue
+      // 3. Accepted Quotes & Revenue
+      try {
         const acceptedQ = query(
-          collection(db, 'quotes'), 
-          where('company_id', '==', companyId), 
+          collection(db, 'quotes'),
+          where('company_id', '==', companyId),
           where('status', '==', 'accepted')
         );
         const acceptedSnap = await getDocs(acceptedQ);
-        
-        let revenue = 0;
+
         acceptedSnap.forEach(doc => {
           const data = doc.data();
           revenue += (data.total_price || 0);
         });
 
         const acceptedCount = acceptedSnap.size;
-        const averageQuote = acceptedCount > 0 ? (revenue / acceptedCount) : 0;
+        averageQuote = acceptedCount > 0 ? (revenue / acceptedCount) : 0;
+      } catch (err) {
+        console.error('Error fetching accepted quotes:', err);
+      }
 
-        setStats({
-          totalQuotes,
-          thisMonth,
-          totalRevenue: revenue,
-          averageQuote
-        });
+      setStats({
+        totalQuotes,
+        thisMonth,
+        totalRevenue: revenue,
+        averageQuote
+      });
 
-        // 4. Recent Quotes
+      // 4. Recent Quotes
+      try {
         const recentQ = query(
           collection(db, 'quotes'),
           where('company_id', '==', companyId),
@@ -84,12 +100,11 @@ export default function DashboardPage() {
           ...doc.data()
         }));
         setRecentQuotes(recent);
-
       } catch (err) {
-        console.error("Error fetching dashboard data:", err);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching recent quotes:', err);
       }
+
+      setLoading(false);
     };
 
     fetchDashboardData();

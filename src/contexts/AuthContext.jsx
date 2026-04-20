@@ -67,23 +67,29 @@ export function AuthProvider({ children }) {
 
   const register = async (email, password, displayName, companyName) => {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    const companyDoc = await addDoc(collection(db, 'companies'), {
-      name: companyName,
-      logo_url: '',
-      global_config: DEFAULT_GLOBAL_CONFIG,
-    });
 
-    await setDoc(doc(db, 'users', credential.user.uid), {
-      display_name: displayName,
-      role: 'Admin',
-      company_id: companyDoc.id,
-    });
+    try {
+      const companyDoc = await addDoc(collection(db, 'companies'), {
+        name: companyName,
+        logo_url: '',
+        global_config: DEFAULT_GLOBAL_CONFIG,
+      });
 
-    setUserProfile({
-      role: 'Admin',
-      company_id: companyDoc.id,
-      display_name: displayName,
-    });
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        display_name: displayName,
+        role: 'Admin',
+        company_id: companyDoc.id,
+      });
+
+      setUserProfile({
+        role: 'Admin',
+        company_id: companyDoc.id,
+        display_name: displayName,
+      });
+    } catch (error) {
+      await credential.user.delete();
+      throw error;
+    }
 
     return credential;
   };
@@ -91,17 +97,22 @@ export function AuthProvider({ children }) {
   const registerWorker = async (email, password, displayName, companyId) => {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
 
-    await setDoc(doc(db, 'users', credential.user.uid), {
-      display_name: displayName,
-      role: 'Worker',
-      company_id: companyId,
-    });
+    try {
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        display_name: displayName,
+        role: 'Worker',
+        company_id: companyId,
+      });
 
-    setUserProfile({
-      role: 'Worker',
-      company_id: companyId,
-      display_name: displayName,
-    });
+      setUserProfile({
+        role: 'Worker',
+        company_id: companyId,
+        display_name: displayName,
+      });
+    } catch (error) {
+      await credential.user.delete();
+      throw error;
+    }
 
     return credential;
   };

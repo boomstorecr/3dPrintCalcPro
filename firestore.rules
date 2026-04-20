@@ -25,7 +25,8 @@ service cloud.firestore {
     // Companies
     match /companies/{companyId} {
       allow read: if isCompanyMember(companyId);
-      allow create, update, delete: if isCompanyAdmin(companyId);
+      allow create: if isAuthenticated();
+      allow update, delete: if isCompanyAdmin(companyId);
 
       // Invites for joining flow
       match /invites/{inviteId} {

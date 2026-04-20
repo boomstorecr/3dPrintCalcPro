@@ -79,6 +79,12 @@ export function AuthProvider({ children }) {
       company_id: companyDoc.id,
     });
 
+    setUserProfile({
+      role: 'Admin',
+      company_id: companyDoc.id,
+      display_name: displayName,
+    });
+
     return credential;
   };
 
@@ -89,6 +95,12 @@ export function AuthProvider({ children }) {
       display_name: displayName,
       role: 'Worker',
       company_id: companyId,
+    });
+
+    setUserProfile({
+      role: 'Worker',
+      company_id: companyId,
+      display_name: displayName,
     });
 
     return credential;

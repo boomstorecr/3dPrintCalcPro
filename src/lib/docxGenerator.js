@@ -255,6 +255,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
   const taxAmount = toNumber(breakdown.taxAmount ?? quoteData.cost_breakdown?.taxAmount ?? 0);
   const hasTax = taxRate > 0 && taxAmount > 0;
   const baseSubtotal = toNumber(breakdown.priceBeforeDiscount) || toNumber(breakdown.subtotal + breakdown.profitAmount);
+  const finalTotal = toNumber(quoteData.total_price_override) || toNumber(quoteData.total_price) || toNumber(breakdown.totalPrice);
 
   let logoRun = null;
   let photoRun = null;
@@ -336,7 +337,7 @@ export async function generateQuoteDocx(quoteData, companyData) {
     new TableRow({
       children: [
         makeCell(i18n.t('document.total'), true),
-        makeCell(formatCurrency(breakdown.totalPrice, currency), true),
+        makeCell(formatCurrency(finalTotal, currency), true),
       ],
     }),
   ];

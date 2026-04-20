@@ -102,14 +102,36 @@ export default function CostBreakdown({ breakdown, currency = 'USD' }) {
           />
         )}
 
-        <BreakdownRow
-          label={t('breakdown.totalPrice')}
-          value={breakdown.totalPrice}
-          currency={currency}
-          strong
-          large
-          className="border-t border-gray-200 pt-4"
-        />
+        {breakdown.totalPriceOverride == null && (
+          <BreakdownRow
+            label={t('breakdown.totalPrice')}
+            value={breakdown.totalPrice}
+            currency={currency}
+            strong
+            large
+            className="border-t border-gray-200 pt-4"
+          />
+        )}
+
+        {breakdown.totalPriceOverride != null && (
+          <>
+            <BreakdownRow
+              label={t('breakdown.calculatedTotal')}
+              value={breakdown.totalPrice}
+              currency={currency}
+              muted
+              className="line-through opacity-60"
+            />
+            <BreakdownRow
+              label={t('breakdown.overriddenTotal')}
+              value={breakdown.totalPriceOverride}
+              currency={currency}
+              strong
+              large
+              className="border-t border-gray-200 pt-4"
+            />
+          </>
+        )}
       </div>
     </Card>
   );

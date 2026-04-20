@@ -151,7 +151,10 @@
       "quoteDetails": "Quote Details",
       "printerConfig": "Printer Configuration",
       "costBreakdown": "Cost Breakdown",
-      "noMaterials": "No materials configured"
+      "noMaterials": "No materials configured",
+      "overrideTotal": "Override Total",
+      "customTotal": "Custom Total",
+      "overrideTotalHint": "Enter a custom total to replace the calculated value"
     },
     "preview": {
       "title": "Quote Preview",
@@ -348,6 +351,8 @@
     "priceAfterDiscount": "Price After Discount",
     "tax": "Tax (IVA)",
     "totalPrice": "Total Price",
+    "calculatedTotal": "Calculated Total",
+    "overriddenTotal": "Final Total (Override)",
     "emptyState": "Configure a printer and materials to see the cost breakdown."
   },
   "fileImport": {

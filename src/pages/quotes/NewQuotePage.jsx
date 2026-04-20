@@ -61,6 +61,8 @@ export default function NewQuotePage() {
   const [discountType, setDiscountType] = useState('percentage');
   const [discountValue, setDiscountValue] = useState('');
   const [discountNote, setDiscountNote] = useState('');
+  const [overrideTotal, setOverrideTotal] = useState(false);
+  const [customTotal, setCustomTotal] = useState('');
   const [photoFile, setPhotoFile] = useState(null);
 
   const [importedFiles, setImportedFiles] = useState(null);
@@ -92,6 +94,10 @@ export default function NewQuotePage() {
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [breakdown, setBreakdown] = useState(null);
+
+  const parsedCustomTotal = parseFloat(customTotal);
+  const hasValidTotalOverride = overrideTotal && Number.isFinite(parsedCustomTotal) && parsedCustomTotal > 0;
+  const totalPriceOverride = hasValidTotalOverride ? parsedCustomTotal : null;
 
   useEffect(() => {
     const loadMaterials = async () => {
@@ -306,6 +312,12 @@ export default function NewQuotePage() {
         setExtraCostRows(mappedExtraCostRows);
         setPrintHours(String(quote.print_hours ?? quote.printHours ?? ''));
         setPrintHoursAutoFilled(false);
+        setOverrideTotal(false);
+        setCustomTotal('');
+        if (quote.total_price_override) {
+          setOverrideTotal(true);
+          setCustomTotal(String(quote.total_price_override));
+        }
         if (quote.printer_id) {
           setSelectedPrinterId(String(quote.printer_id));
         } else {
@@ -560,7 +572,8 @@ export default function NewQuotePage() {
       },
       photo_url: isEditMode ? currentPhotoUrl : '',
       cost_breakdown: calculateResult,
-      total_price: calculateResult.totalPrice,
+      total_price: totalPriceOverride ?? calculateResult.totalPrice,
+      total_price_override: totalPriceOverride,
       status: 'draft',
       file_data:
         importedFiles?.files?.map((f) => ({
@@ -926,6 +939,43 @@ export default function NewQuotePage() {
           />
         </Card>
 
+        <Card>
+          <div className="space-y-3">
+            <label htmlFor="override-total" className="inline-flex items-center gap-3 text-sm font-medium text-gray-700">
+              <input
+                id="override-total"
+                type="checkbox"
+                checked={overrideTotal}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setOverrideTotal(checked);
+                  if (!checked) {
+                    setCustomTotal('');
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              {t('quotes.new.overrideTotal')}
+            </label>
+
+            {overrideTotal && (
+              <div className="space-y-1">
+                <Input
+                  id="custom-total"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  label={t('quotes.new.customTotal')}
+                  value={customTotal}
+                  onChange={(event) => setCustomTotal(event.target.value)}
+                  placeholder={breakdown ? formatCurrency(breakdown.totalPrice, companyConfig.currency) : ''}
+                />
+                <p className="text-xs text-gray-500">{t('quotes.new.overrideTotalHint')}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
         <div className="flex flex-wrap justify-end gap-3">
           <Button type="button" variant="secondary" onClick={() => navigate(-1)}>
             {t('common.cancel')}
@@ -943,7 +993,19 @@ export default function NewQuotePage() {
               <p className="text-sm text-gray-500">{t('common.loading')}</p>
             </Card>
           )}
-          {!loadingCompanyConfig && <CostBreakdown breakdown={breakdown} currency={companyConfig.currency} />}
+          {!loadingCompanyConfig && (
+            <CostBreakdown
+              breakdown={
+                breakdown
+                  ? {
+                      ...breakdown,
+                      totalPriceOverride,
+                    }
+                  : null
+              }
+              currency={companyConfig.currency}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -137,6 +137,7 @@ function getMaterials(quote) {
 
 function getBreakdown(quote) {
   const raw = quote?.cost_breakdown || quote?.costBreakdown || quote?.breakdown || {};
+  const totalPriceOverride = toNumber(raw.totalPriceOverride ?? quote?.total_price_override) || null;
   const extraCosts = Array.isArray(raw.extraCosts)
     ? raw.extraCosts
     : Array.isArray(quote?.extra_costs)
@@ -187,6 +188,7 @@ function getBreakdown(quote) {
     taxRate,
     taxAmount,
     totalPrice,
+    totalPriceOverride,
   };
 }
 
@@ -693,7 +695,7 @@ export default function QuotePreviewPage() {
               </p>
               <p className="text-sm text-gray-700">
                 <span className="font-medium text-gray-900">{t('common.total')}:</span>{' '}
-                {formatCurrency(breakdown.totalPrice, currency)}
+                {formatCurrency(breakdown.totalPriceOverride ?? breakdown.totalPrice, currency)}
               </p>
             </div>
           </div>

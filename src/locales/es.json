@@ -151,7 +151,10 @@
       "quoteDetails": "Detalles de Cotización",
       "printerConfig": "Configuración de Impresora",
       "costBreakdown": "Desglose de Costos",
-      "noMaterials": "No hay materiales configurados"
+      "noMaterials": "No hay materiales configurados",
+      "overrideTotal": "Anular Total",
+      "customTotal": "Total Personalizado",
+      "overrideTotalHint": "Ingrese un total personalizado para reemplazar el valor calculado"
     },
     "preview": {
       "title": "Vista Previa de Cotización",
@@ -348,6 +351,8 @@
     "priceAfterDiscount": "Precio Después de Descuento",
     "tax": "Impuesto (IVA)",
     "totalPrice": "Precio Total",
+    "calculatedTotal": "Total Calculado",
+    "overriddenTotal": "Total Final (Anulado)",
     "emptyState": "Configura una impresora y materiales para ver el desglose de costos."
   },
   "fileImport": {

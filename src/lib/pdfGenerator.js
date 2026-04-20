@@ -377,6 +377,7 @@ export async function generateQuotePDF(quoteData, companyData) {
   const taxRate = toNumber(breakdown.taxRate ?? quoteData?.tax_rate ?? 0);
   const taxAmount = toNumber(breakdown.taxAmount);
   const baseSubtotal = toNumber(breakdown.priceBeforeDiscount) || toNumber(breakdown.subtotal + breakdown.profitAmount);
+  const finalTotal = toNumber(quoteData.total_price_override) || toNumber(quoteData.total_price) || toNumber(breakdown.totalPrice);
   const hasDiscount = Boolean(discount) && discountAmount > 0;
   const hasTax = taxAmount > 0 || taxRate > 0;
 
@@ -390,7 +391,7 @@ export async function generateQuotePDF(quoteData, companyData) {
 
   if (!hasDiscount && !hasTax) {
     doc.setFont('helvetica', 'bold');
-    doc.text(`${i18n.t('document.total')}: ${formatCurrency(breakdown.totalPrice, currency)}`, marginX, cursorY);
+    doc.text(`${i18n.t('document.total')}: ${formatCurrency(finalTotal, currency)}`, marginX, cursorY);
     doc.setFont('helvetica', 'normal');
     cursorY += 20;
   } else {
@@ -417,7 +418,7 @@ export async function generateQuotePDF(quoteData, companyData) {
     }
 
     doc.setFont('helvetica', 'bold');
-    doc.text(`${i18n.t('document.total')}: ${formatCurrency(breakdown.totalPrice, currency)}`, marginX, cursorY);
+    doc.text(`${i18n.t('document.total')}: ${formatCurrency(finalTotal, currency)}`, marginX, cursorY);
     doc.setFont('helvetica', 'normal');
     cursorY += 20;
   }

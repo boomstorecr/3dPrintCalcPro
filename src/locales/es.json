@@ -7,6 +7,7 @@
     "newQuote": "Nueva Cotización",
     "quoteHistory": "Historial de Cotizaciones",
     "orders": "Pedidos",
+    "account": "Cuenta",
     "settings": "Configuración",
     "logout": "Cerrar Sesión"
   },
@@ -56,6 +57,7 @@
     "signInSubtitle": "Inicia sesión en tu cuenta",
     "email": "Correo Electrónico",
     "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?",
     "signInButton": "Iniciar Sesión",
     "noAccount": "¿No tienes una cuenta?",
     "register": "Registrarse",
@@ -69,7 +71,13 @@
     "joinCompany": "Unirse a la Empresa",
     "createAccount": "Crear Cuenta",
     "haveAccount": "¿Ya tienes una cuenta?",
-    "creatingAccount": "Creando cuenta..."
+    "creatingAccount": "Creando cuenta...",
+    "resetPassword": "Restablecer Contraseña",
+    "resetPasswordSubtitle": "Ingresa tu correo electrónico y te enviaremos un enlace para restablecer tu contraseña.",
+    "resetEmailSent": "¡Correo de restablecimiento enviado! Revisa tu bandeja de entrada.",
+    "sendResetLink": "Enviar Enlace",
+    "sending": "Enviando...",
+    "backToLogin": "Volver a Iniciar Sesión"
   },
   "validation": {
     "emailRequired": "El correo electrónico es requerido",
@@ -264,6 +272,15 @@
       "saving": "Guardando...",
       "adminOnly": "Solo los administradores pueden editar la configuración de la empresa."
     },
+    "account": {
+      "changePassword": "Cambiar Contraseña",
+      "currentPassword": "Contraseña Actual",
+      "newPassword": "Nueva Contraseña",
+      "confirmNewPassword": "Confirmar Nueva Contraseña",
+      "passwordChanged": "Contraseña actualizada exitosamente",
+      "updatePassword": "Actualizar Contraseña",
+      "updating": "Actualizando..."
+    },
     "energy": {
       "title": "Configuración de Electricidad",
       "kwhCost": "Costo por kWh",
@@ -328,6 +345,7 @@
       "inviteGenerated": "¡Código de invitación generado!",
       "codeCopied": "¡Código copiado al portapapeles!",
       "role": "Rol",
+      "email": "Correo Electrónico",
       "admin": "Administrador",
       "worker": "Trabajador",
       "copyCode": "Copiar Código",

@@ -223,6 +223,11 @@ export default function TeamPage() {
         render: (row) => getDisplayName(row),
       },
       {
+        key: 'email',
+        label: t('settings.team.email'),
+        render: (row) => row.email || '—',
+      },
+      {
         key: 'role',
         label: t('settings.team.role'),
         render: (row) => {

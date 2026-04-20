@@ -90,6 +90,12 @@ export default function LoginPage() {
           error={errors.password}
         />
 
+        <div className="flex justify-end">
+          <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-500">
+            {t('auth.forgotPassword')}
+          </Link>
+        </div>
+
         {firebaseError && (
           <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {firebaseError}

@@ -2,8 +2,12 @@ import { createContext, useEffect, useMemo, useState } from 'react';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  updatePassword,
+  EmailAuthProvider,
 } from 'firebase/auth';
 import { addDoc, collection, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
@@ -104,6 +108,7 @@ export function AuthProvider({ children }) {
 
       await setDoc(doc(db, 'users', credential.user.uid), {
         display_name: displayName,
+        email,
         role: 'Admin',
         company_id: companyDoc.id,
         language: i18n.language,
@@ -130,6 +135,7 @@ export function AuthProvider({ children }) {
     try {
       await setDoc(doc(db, 'users', credential.user.uid), {
         display_name: displayName,
+        email,
         role: 'Worker',
         company_id: companyId,
         language: i18n.language,
@@ -150,6 +156,20 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     return signOut(auth);
+  };
+
+  const resetPassword = (email) => {
+    return sendPasswordResetEmail(auth, email);
+  };
+
+  const changePassword = async (currentPassword, newPassword) => {
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+
+    const credential = EmailAuthProvider.credential(user.email, currentPassword);
+    await reauthenticateWithCredential(user, credential);
+    await updatePassword(user, newPassword);
   };
 
   const updateLanguage = async (lang) => {
@@ -176,6 +196,8 @@ export function AuthProvider({ children }) {
       register,
       registerWorker,
       logout,
+      resetPassword,
+      changePassword,
       updateLanguage,
     }),
     [user, userProfile, companyCurrency, companyTaxRate, loading]

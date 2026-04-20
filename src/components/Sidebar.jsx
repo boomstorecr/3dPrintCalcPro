@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Plus, List, Package, Settings, LogOut } from 'lucide-react';
+import { Home, Plus, List, Package, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,7 @@ export default function Sidebar({ isOpen, setIsOpen }) {
     { name: t('nav.newQuote'), href: '/quotes/new', icon: Plus },
     { name: t('nav.quoteHistory'), href: '/quotes', icon: List },
     { name: t('nav.orders'), href: '/orders', icon: Package },
+    { name: t('nav.account'), href: '/account', icon: User },
     { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];
 

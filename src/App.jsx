@@ -8,7 +8,9 @@ import DashboardLayout from './layouts/DashboardLayout';
 import NotFoundPage from './pages/NotFoundPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
 import DashboardPage from './pages/DashboardPage';
+import AccountPage from './pages/AccountPage';
 import NewQuotePage from './pages/quotes/NewQuotePage';
 import QuotePreviewPage from './pages/quotes/QuotePreviewPage';
 import QuoteHistoryPage from './pages/quotes/QuoteHistoryPage';
@@ -31,6 +33,7 @@ function App() {
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
 
             <Route element={<ProtectedRoute />}>
@@ -41,6 +44,7 @@ function App() {
                 <Route path="/quotes" element={<QuoteHistoryPage />} />
                 <Route path="/orders" element={<OrdersListPage />} />
                 <Route path="/orders/:id" element={<OrderDetailPage />} />
+                <Route path="/account" element={<AccountPage />} />
 
                 <Route element={<AdminRoute />}>
                   <Route path="/settings" element={<SettingsLayout />}>

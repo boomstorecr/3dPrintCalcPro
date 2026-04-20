@@ -7,6 +7,7 @@
     "newQuote": "New Quote",
     "quoteHistory": "Quote History",
     "orders": "Orders",
+    "account": "Account",
     "settings": "Settings",
     "logout": "Logout"
   },
@@ -56,6 +57,7 @@
     "signInSubtitle": "Sign in to your account",
     "email": "Email",
     "password": "Password",
+    "forgotPassword": "Forgot your password?",
     "signInButton": "Sign In",
     "noAccount": "Don't have an account?",
     "register": "Register",
@@ -69,7 +71,13 @@
     "joinCompany": "Join Company",
     "createAccount": "Create Account",
     "haveAccount": "Already have an account?",
-    "creatingAccount": "Creating account..."
+    "creatingAccount": "Creating account...",
+    "resetPassword": "Reset Password",
+    "resetPasswordSubtitle": "Enter your email and we'll send you a link to reset your password.",
+    "resetEmailSent": "Password reset email sent! Check your inbox.",
+    "sendResetLink": "Send Reset Link",
+    "sending": "Sending...",
+    "backToLogin": "Back to Sign In"
   },
   "validation": {
     "emailRequired": "Email is required",
@@ -264,6 +272,15 @@
       "saving": "Saving...",
       "adminOnly": "Only admins can edit company settings."
     },
+    "account": {
+      "changePassword": "Change Password",
+      "currentPassword": "Current Password",
+      "newPassword": "New Password",
+      "confirmNewPassword": "Confirm New Password",
+      "passwordChanged": "Password updated successfully",
+      "updatePassword": "Update Password",
+      "updating": "Updating..."
+    },
     "energy": {
       "title": "Electricity Configuration",
       "kwhCost": "Cost per kWh",
@@ -328,6 +345,7 @@
       "inviteGenerated": "Invite code generated!",
       "codeCopied": "Code copied to clipboard!",
       "role": "Role",
+      "email": "Email",
       "admin": "Admin",
       "worker": "Worker",
       "copyCode": "Copy Code",

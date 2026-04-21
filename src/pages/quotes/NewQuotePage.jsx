@@ -460,6 +460,17 @@ export default function NewQuotePage() {
           return row;
         }
 
+        if (field === 'materialId') {
+          const selectedMaterial = materialsCatalog.find((material) => material.id === value);
+          const hasExistingColor = typeof row.color === 'string' ? row.color.trim() !== '' : row.color != null;
+
+          return {
+            ...row,
+            materialId: value,
+            color: hasExistingColor ? row.color : selectedMaterial?.color || null,
+          };
+        }
+
         return {
           ...row,
           [field]: value,
@@ -766,16 +777,6 @@ export default function NewQuotePage() {
 
             {materialRows.map((row, index) => (
               <div key={row.id} className="grid grid-cols-1 gap-3 rounded-md border border-gray-200 p-4 md:grid-cols-12">
-                {row.color && row.color !== 'default' && (
-                  <div className="flex items-center gap-2 md:col-span-12">
-                    <span
-                      className="inline-block h-4 w-4 rounded-full border border-gray-300"
-                      style={{ backgroundColor: row.color }}
-                    />
-                    <span className="text-xs text-gray-500">{t('quotes.new.autoFilled')}: {row.color}</span>
-                  </div>
-                )}
-
                 <Select
                   id={`material-${row.id}`}
                   label={t('quotes.new.materialName')}
@@ -783,7 +784,7 @@ export default function NewQuotePage() {
                   onChange={(event) => handleMaterialRowChange(row.id, 'materialId', event.target.value)}
                   options={materialOptions}
                   placeholder={t('quotes.new.selectMaterial')}
-                  className="md:col-span-6"
+                  className="md:col-span-5"
                   disabled={materialsCatalog.length === 0}
                 />
 
@@ -795,8 +796,35 @@ export default function NewQuotePage() {
                   step="0.01"
                   value={row.grams}
                   onChange={(event) => handleMaterialRowChange(row.id, 'grams', event.target.value)}
-                  className="md:col-span-4"
+                  className="md:col-span-3"
                 />
+
+                <div className="md:col-span-2">
+                  <label htmlFor={`material-color-${row.id}`} className="mb-1 block text-sm font-medium text-gray-700">
+                    {t('settings.materials.color')}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id={`material-color-${row.id}`}
+                      type="color"
+                      value={typeof row.color === 'string' && row.color.startsWith('#') ? row.color : '#000000'}
+                      onChange={(event) => handleMaterialRowChange(row.id, 'color', event.target.value)}
+                      className="h-8 w-10 cursor-pointer rounded border border-gray-300"
+                      title={t('settings.materials.color')}
+                    />
+                    {row.color && (
+                      <button
+                        type="button"
+                        onClick={() => handleMaterialRowChange(row.id, 'color', null)}
+                        className="text-xs text-gray-400 hover:text-red-500"
+                        title={t('common.clear')}
+                        aria-label={t('common.clear')}
+                      >
+                        X
+                      </button>
+                    )}
+                  </div>
+                </div>
 
                 <div className="flex items-end md:col-span-2">
                   <Button

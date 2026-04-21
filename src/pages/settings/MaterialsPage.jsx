@@ -27,6 +27,7 @@ const MATERIAL_TYPE_OPTIONS = [
 const EMPTY_FORM = {
   name: '',
   type: 'PLA',
+  color: '#000000',
   cost_per_kg: '',
   density_g_per_cm3: '',
 };
@@ -88,6 +89,20 @@ export default function MaterialsPage() {
         label: t('settings.materials.name'),
       },
       {
+        key: 'color',
+        label: t('settings.materials.color'),
+        render: (row) =>
+          row.color ? (
+            <span
+              className="inline-block h-4 w-4 rounded-full border border-gray-300"
+              style={{ backgroundColor: row.color }}
+              title={row.color}
+            />
+          ) : (
+            <span className="text-gray-400">-</span>
+          ),
+      },
+      {
         key: 'type',
         label: t('settings.materials.type'),
       },
@@ -139,6 +154,7 @@ export default function MaterialsPage() {
     setFormValues({
       name: material.name ?? '',
       type: material.type ?? 'PLA',
+      color: material.color ?? '#000000',
       cost_per_kg: String(material.cost_per_kg ?? ''),
       density_g_per_cm3: String(material.density_g_per_cm3 ?? ''),
     });
@@ -216,6 +232,7 @@ export default function MaterialsPage() {
       const payload = {
         name: formValues.name.trim(),
         type: formValues.type,
+        color: formValues.color,
         cost_per_kg: costPerKg,
         density_g_per_cm3: density,
       };
@@ -338,6 +355,22 @@ export default function MaterialsPage() {
             value={formValues.density_g_per_cm3}
             onChange={handleInputChange('density_g_per_cm3')}
           />
+
+          <div>
+            <label htmlFor="material-color" className="mb-1 block text-sm font-medium text-gray-700">
+              {t('settings.materials.color')}
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                id="material-color"
+                value={formValues.color || '#000000'}
+                onChange={(event) => setFormValues({ ...formValues, color: event.target.value })}
+                className="h-10 w-14 cursor-pointer rounded border border-gray-300"
+              />
+              <span className="text-sm text-gray-500">{formValues.color || '#000000'}</span>
+            </div>
+          </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={closeFormModal} disabled={saving}>

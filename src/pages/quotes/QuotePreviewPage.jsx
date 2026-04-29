@@ -375,7 +375,13 @@ export default function QuotePreviewPage() {
     try {
       // Fast path: only reuse order_id if referenced order still exists
       if (quote.order_id) {
-        const existingOrderById = await getOrder(quote.order_id);
+        let existingOrderById = null;
+        try {
+          existingOrderById = await getOrder(quote.order_id);
+        } catch {
+          // Permission error means the order doesn't exist or isn't accessible
+          existingOrderById = null;
+        }
 
         if (existingOrderById) {
           info(t('toast.orderCreated'));

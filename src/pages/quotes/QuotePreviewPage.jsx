@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { deleteField, doc, getDoc } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { saveAs } from 'file-saver';
 import CostBreakdown from '../../components/CostBreakdown';
@@ -15,7 +15,7 @@ import { useToast } from '../../hooks/useToast';
 import { generateQuoteDocx } from '../../lib/docxGenerator';
 import { formatCurrency } from '../../lib/currency';
 import { db } from '../../lib/firebase';
-import { getOrderByQuoteId, createOrderFromQuote } from '../../lib/orders';
+import { getOrder, getOrderByQuoteId, createOrderFromQuote } from '../../lib/orders';
 import { generateQuotePDF } from '../../lib/pdfGenerator';
 import { deleteQuote, getQuote, updateQuote } from '../../lib/quotes';
 
@@ -373,11 +373,26 @@ export default function QuotePreviewPage() {
 
     setCreatingOrder(true);
     try {
-      // Fast path: check if quote already has an order_id stamped on it
+      // Fast path: only reuse order_id if referenced order still exists
       if (quote.order_id) {
-        info(t('toast.orderCreated'));
-        navigate('/orders/' + quote.order_id);
-        return;
+        const existingOrderById = await getOrder(quote.order_id);
+
+        if (existingOrderById) {
+          info(t('toast.orderCreated'));
+          navigate('/orders/' + quote.order_id);
+          return;
+        }
+
+        await updateQuote(quote.id, { order_id: deleteField() });
+        setQuote((prev) => {
+          if (!prev) {
+            return prev;
+          }
+
+          const nextQuote = { ...prev };
+          delete nextQuote.order_id;
+          return nextQuote;
+        });
       }
 
       // Fallback: query orders collection (for orders created before the order_id stamp)

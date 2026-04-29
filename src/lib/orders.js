@@ -6,6 +6,7 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   orderBy,
@@ -268,9 +269,19 @@ export async function deleteOrder(orderId) {
   batch.delete(orderRef);
 
   if (orderSnap.exists()) {
-    const publicToken = orderSnap.data().public_token;
+    const orderData = orderSnap.data();
+    const publicToken = orderData.public_token;
     if (publicToken) {
       batch.delete(doc(db, PUBLIC_ORDERS_COL, publicToken));
+    }
+
+    // Clear order_id from the associated quote
+    if (orderData.quote_id) {
+      const quoteRef = doc(db, 'quotes', orderData.quote_id);
+      const quoteSnap = await getDoc(quoteRef);
+      if (quoteSnap.exists()) {
+        batch.update(quoteRef, { order_id: deleteField() });
+      }
     }
   }
 

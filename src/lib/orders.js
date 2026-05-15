@@ -16,6 +16,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
+import { deductMaterialStock, restoreMaterialStock } from './materials';
 
 const ORDERS_COL = 'orders';
 const PUBLIC_ORDERS_COL = 'public_orders';
@@ -104,6 +105,14 @@ export async function createOrderFromQuote(quote, companyId, companyData) {
   const pieces = buildPiecesFromQuote(quote);
   const publicToken = generatePublicToken();
 
+  const materialsConsumed = (Array.isArray(quote?.materials) ? quote.materials : [])
+    .filter((m) => m.materialId || m.material_id)
+    .map((m) => ({
+      materialId: m.materialId || m.material_id,
+      materialName: m.materialName || m.name || '',
+      grams: Number(m.grams) || 0,
+    }));
+
   const batch = writeBatch(db);
   const orderRef = doc(collection(db, ORDERS_COL));
   const publicRef = doc(db, PUBLIC_ORDERS_COL, publicToken);
@@ -114,6 +123,7 @@ export async function createOrderFromQuote(quote, companyId, companyData) {
     client_name: quote.client_name || '',
     public_token: publicToken,
     pieces,
+    materials_consumed: materialsConsumed,
     status: 'pending',
     completion_percent: 0,
     created_at: serverTimestamp(),
@@ -137,6 +147,11 @@ export async function createOrderFromQuote(quote, companyId, companyData) {
   batch.update(quoteRef, { order_id: orderRef.id });
 
   await batch.commit();
+
+  if (materialsConsumed.length > 0) {
+    await deductMaterialStock(materialsConsumed);
+  }
+
   return orderRef.id;
 }
 
@@ -259,6 +274,53 @@ export async function getPublicOrder(token) {
   }
 
   return { token: snap.id, ...snap.data() };
+}
+
+export async function cancelOrder(orderId) {
+  const orderRef = doc(db, ORDERS_COL, orderId);
+  const orderSnap = await getDoc(orderRef);
+
+  if (!orderSnap.exists()) {
+    throw new Error('Order not found');
+  }
+
+  const orderData = orderSnap.data();
+
+  if (orderData.status === 'cancelled') {
+    throw new Error('Order is already cancelled');
+  }
+
+  const batch = writeBatch(db);
+
+  batch.update(orderRef, {
+    status: 'cancelled',
+    updated_at: serverTimestamp(),
+  });
+
+  if (orderData.public_token) {
+    const publicRef = doc(db, PUBLIC_ORDERS_COL, orderData.public_token);
+    batch.update(publicRef, {
+      status: 'cancelled',
+      updated_at: serverTimestamp(),
+    });
+  }
+
+  // Clear order_id from the associated quote
+  if (orderData.quote_id) {
+    const quoteRef = doc(db, 'quotes', orderData.quote_id);
+    const quoteSnap = await getDoc(quoteRef);
+    if (quoteSnap.exists()) {
+      batch.update(quoteRef, { order_id: deleteField() });
+    }
+  }
+
+  await batch.commit();
+
+  // Restore inventory
+  const materialsConsumed = orderData.materials_consumed || [];
+  if (materialsConsumed.length > 0) {
+    await restoreMaterialStock(materialsConsumed);
+  }
 }
 
 export async function deleteOrder(orderId) {

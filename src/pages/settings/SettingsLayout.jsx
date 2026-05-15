@@ -19,7 +19,6 @@ export default function SettingsLayout() {
     { label: t('settings.tabs.companyProfile'), to: '/settings/profile' },
     { label: t('settings.tabs.electricity'), to: '/settings/energy' },
     { label: t('settings.tabs.printers'), to: '/settings/printers' },
-    { label: t('settings.tabs.materials'), to: '/settings/materials' },
     { label: t('settings.tabs.team'), to: '/settings/team' },
   ];
 

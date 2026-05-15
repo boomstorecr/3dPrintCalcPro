@@ -33,6 +33,10 @@ function getClientName(quote) {
   return quote.client_name || quote.clientName || quote.client?.name || 'Unnamed Client';
 }
 
+function getPieceName(quote) {
+  return quote.piece_name || quote.pieceName || '';
+}
+
 function getQuoteDate(quote) {
   const createdAt = quote.created_at || quote.createdAt;
 
@@ -126,7 +130,11 @@ export default function QuoteHistoryPage() {
       return quotes;
     }
 
-    return quotes.filter((quote) => getClientName(quote).toLowerCase().includes(normalizedSearch));
+    return quotes.filter((quote) => {
+      const client = getClientName(quote).toLowerCase();
+      const piece = getPieceName(quote).toLowerCase();
+      return client.includes(normalizedSearch) || piece.includes(normalizedSearch);
+    });
   }, [quotes, searchTerm]);
 
   const statusOptions = useMemo(
@@ -143,7 +151,14 @@ export default function QuoteHistoryPage() {
       {
         key: 'clientName',
         label: t('common.client'),
-        render: (row) => getClientName(row),
+        render: (row) => (
+          <div className="space-y-0.5">
+            <p className="text-sm font-medium text-gray-900">{getClientName(row)}</p>
+            <p className="text-xs text-gray-500">
+              {t('quotes.new.pieceName')}: {getPieceName(row) || t('common.noData')}
+            </p>
+          </div>
+        ),
       },
       {
         key: 'date',

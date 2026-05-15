@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { collection, query, where, orderBy, limit, getDocs, Timestamp } from 'firebase/firestore';
+import { DollarSign, Receipt } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
+import { getMonthlyIncomeSummary } from '../lib/bills';
 import { formatCurrency } from '../lib/currency';
 import { db } from '../lib/firebase';
 import { Card } from '../components/ui/Card';
@@ -23,12 +25,16 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(true);
+  const [incomeLoading, setIncomeLoading] = useState(true);
   const [stats, setStats] = useState({
     totalQuotes: 0,
     thisMonth: 0,
     totalRevenue: 0,
     averageQuote: 0
   });
+  const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [paidBillsCount, setPaidBillsCount] = useState(0);
+  const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [recentQuotes, setRecentQuotes] = useState([]);
 
   useEffect(() => {
@@ -113,11 +119,34 @@ export default function DashboardPage() {
         console.error('Error fetching recent quotes:', err);
       }
 
+      // 5. Monthly Income Summary (paid bills)
+      try {
+        const incomeSummary = await getMonthlyIncomeSummary(companyId, 6);
+        setMonthlyTrend(incomeSummary);
+
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const currentMonthSummary = incomeSummary.find(
+          (entry) => entry.month === currentMonth && entry.year === currentYear
+        );
+
+        setMonthlyIncome(Number(currentMonthSummary?.total) || 0);
+        setPaidBillsCount(Number(currentMonthSummary?.count) || 0);
+      } catch (err) {
+        console.error('Error fetching monthly income summary:', err);
+        setMonthlyTrend([]);
+        setMonthlyIncome(0);
+        setPaidBillsCount(0);
+      } finally {
+        setIncomeLoading(false);
+      }
+
       setLoading(false);
     };
 
     fetchDashboardData();
-  }, [userProfile]);
+  }, [userProfile?.company_id]);
 
   if (loading || !userProfile) {
     return (
@@ -177,7 +206,7 @@ export default function DashboardPage() {
       </div>
 
       {/* 2. Quick Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card className="p-5">
           <div className="text-sm font-medium text-gray-500 mb-1">{t('dashboard.totalQuotes')}</div>
           <div className="text-3xl font-bold text-gray-900">{stats.totalQuotes}</div>
@@ -204,6 +233,26 @@ export default function DashboardPage() {
             {formatCurrency(stats.averageQuote, companyCurrency)}
           </div>
           <div className="text-xs text-gray-400 mt-1">{t('dashboard.revenuePerAccepted')}</div>
+        </Card>
+
+        <Card className="p-5 border-green-200 bg-green-50/40">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-sm font-medium text-gray-500">{t('dashboard.incomeThisMonth')}</div>
+            <DollarSign className="w-5 h-5 text-green-600" />
+          </div>
+          <div className="text-3xl font-bold text-green-700">
+            {formatCurrency(monthlyIncome, companyCurrency)}
+          </div>
+          <div className="text-xs text-green-700/80 mt-1">{t('dashboard.monthlyIncome')}</div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-sm font-medium text-gray-500">{t('dashboard.paidBills')}</div>
+            <Receipt className="w-5 h-5 text-gray-500" />
+          </div>
+          <div className="text-3xl font-bold text-gray-900">{paidBillsCount}</div>
+          <div className="text-xs text-gray-400 mt-1">{t('dashboard.thisMonth')}</div>
         </Card>
       </div>
 
@@ -261,6 +310,47 @@ export default function DashboardPage() {
             <div className="p-8 text-center text-gray-500">
               {t('dashboard.noQuotes')} {t('dashboard.createFirst')}
             </div>
+          )}
+        </div>
+      </Card>
+
+      {/* 4. Monthly Income Trend */}
+      <Card className="overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800">{t('dashboard.monthlyTrend')}</h2>
+        </div>
+
+        <div className="overflow-x-auto">
+          {incomeLoading ? (
+            <div className="p-8 text-center text-gray-500">{t('common.loading')}</div>
+          ) : monthlyTrend.length > 0 ? (
+            <Table>
+              <thead className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <th className="px-5 py-3">{t('dashboard.month')}</th>
+                  <th className="px-5 py-3">{t('dashboard.billsCount')}</th>
+                  <th className="px-5 py-3">{t('dashboard.totalIncome')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {monthlyTrend.map((entry) => (
+                  <tr key={`${entry.year}-${entry.month}`} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-900 font-medium">
+                      {new Date(entry.year, entry.month - 1, 1).toLocaleDateString(i18n.language || undefined, {
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </td>
+                    <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-500">{entry.count}</td>
+                    <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(entry.total, companyCurrency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          ) : (
+            <div className="p-8 text-center text-gray-500">{t('dashboard.noIncomeData')}</div>
           )}
         </div>
       </Card>

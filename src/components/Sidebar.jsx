@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Plus, List, Package, Settings, LogOut, User } from 'lucide-react';
+import { Home, List, Package, Receipt, Users, Warehouse, Settings, LogOut, User } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 
@@ -10,9 +10,11 @@ export default function Sidebar({ isOpen, setIsOpen }) {
 
   const navItems = [
     { name: t('nav.dashboard'), href: '/', icon: Home },
-    { name: t('nav.newQuote'), href: '/quotes/new', icon: Plus },
-    { name: t('nav.quoteHistory'), href: '/quotes', icon: List },
+    { name: t('nav.quotes', { defaultValue: 'Quotes' }), href: '/quotes', icon: List },
     { name: t('nav.orders'), href: '/orders', icon: Package },
+    { name: t('nav.bills'), href: '/bills', icon: Receipt },
+    { name: t('nav.clients'), href: '/clients', icon: Users },
+    { name: t('nav.inventory', { defaultValue: 'Inventory' }), href: '/inventory', icon: Warehouse },
     { name: t('nav.account'), href: '/account', icon: User },
     { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];

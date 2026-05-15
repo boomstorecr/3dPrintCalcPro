@@ -11,6 +11,7 @@ import CostBreakdown from '../../components/CostBreakdown';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { formatCurrency } from '../../lib/currency';
+import { getClients } from '../../lib/clients';
 import { getMaterials } from '../../lib/materials';
 import { getPrinters } from '../../lib/printers';
 import { calculateQuote } from '../../lib/pricingEngine';
@@ -50,6 +51,11 @@ export default function NewQuotePage() {
   const companyId = userProfile?.company_id;
 
   const [clientName, setClientName] = useState('');
+  const [clientId, setClientId] = useState(null);
+  const [clients, setClients] = useState([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [clientSearch, setClientSearch] = useState('');
+  const [pieceName, setPieceName] = useState('');
   const [designUrl, setDesignUrl] = useState('');
   const [estimatedDeliveryDays, setEstimatedDeliveryDays] = useState('');
   const [expirationDate, setExpirationDate] = useState(() => {
@@ -98,6 +104,25 @@ export default function NewQuotePage() {
   const parsedCustomTotal = parseFloat(customTotal);
   const hasValidTotalOverride = overrideTotal && Number.isFinite(parsedCustomTotal) && parsedCustomTotal > 0;
   const totalPriceOverride = hasValidTotalOverride ? parsedCustomTotal : null;
+
+  useEffect(() => {
+    const loadClients = async () => {
+      if (!companyId) {
+        setClients([]);
+        return;
+      }
+
+      try {
+        const rows = await getClients(companyId);
+        setClients(rows);
+      } catch (loadError) {
+        console.error('[NewQuotePage] Failed to load clients', loadError);
+        error(t('clients.loadFailed'));
+      }
+    };
+
+    loadClients();
+  }, [companyId, error, t]);
 
   useEffect(() => {
     const loadMaterials = async () => {
@@ -256,6 +281,7 @@ export default function NewQuotePage() {
         }
 
         const initialClientName = String(quote.client_name ?? quote.client?.name ?? '');
+        const initialPieceName = String(quote.piece_name ?? quote.pieceName ?? '');
         const initialDesignUrl = String(quote.design_url ?? quote.client?.designUrl ?? '');
 
         const quoteMaterials = Array.isArray(quote.materials) ? quote.materials : [];
@@ -292,6 +318,9 @@ export default function NewQuotePage() {
         }
 
         setClientName(initialClientName);
+        setClientId(quote.client_id ? String(quote.client_id) : null);
+        setClientSearch(initialClientName);
+        setPieceName(initialPieceName);
         setDesignUrl(initialDesignUrl);
         if (quote.expiration_date) {
           setExpirationDate(String(quote.expiration_date));
@@ -369,6 +398,11 @@ export default function NewQuotePage() {
       })),
     [materialsCatalog]
   );
+
+  const filteredClients = useMemo(() => {
+    const normalizedSearch = (clientSearch || '').toLowerCase();
+    return clients.filter((client) => (client.name || '').toLowerCase().includes(normalizedSearch));
+  }, [clientSearch, clients]);
 
   useEffect(() => {
     const pricedMaterials = materialRows
@@ -572,6 +606,8 @@ export default function NewQuotePage() {
       company_id: companyId,
       user_id: user.uid,
       client_name: clientName.trim(),
+      client_id: clientId || null,
+      piece_name: pieceName.trim(),
       design_url: designUrl.trim(),
       expiration_date: expirationDate,
       estimated_delivery_days: parseInt(estimatedDeliveryDays, 10) || 0,
@@ -643,13 +679,78 @@ export default function NewQuotePage() {
       <div className="space-y-6 xl:col-span-2">
         <Card title={t('quotes.new.quoteDetails')}>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="relative md:col-span-2">
+              <label htmlFor="client-name" className="mb-1 block text-sm font-medium text-gray-700">
+                {t('quotes.new.clientName') || t('clients.name')}
+              </label>
+
+              {clientId && (
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
+                    {t('clients.selectedClient')}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setClientId(null)}
+                    className="text-xs text-gray-500 hover:text-red-500"
+                  >
+                    {t('clients.clearSelection')}
+                  </button>
+                </div>
+              )}
+
+              <Input
+                id="client-name"
+                value={clientName}
+                onChange={(event) => {
+                  setClientName(event.target.value);
+                  setClientSearch(event.target.value);
+                  setShowClientDropdown(true);
+                  if (clientId) {
+                    setClientId(null);
+                  }
+                }}
+                onFocus={() => setShowClientDropdown(true)}
+                onBlur={() => {
+                  setTimeout(() => setShowClientDropdown(false), 200);
+                }}
+                placeholder={t('clients.selectClient')}
+                required
+              />
+
+              {showClientDropdown && clients.length > 0 && (
+                <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                  {filteredClients.map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setClientName(client.name || '');
+                        setClientSearch(client.name || '');
+                        setClientId(client.id);
+                        setShowClientDropdown(false);
+                      }}
+                    >
+                      <span className="font-medium">{client.name}</span>
+                      {client.email && <span className="ml-2 text-xs text-gray-500">{client.email}</span>}
+                    </button>
+                  ))}
+
+                  {filteredClients.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-gray-500">{t('clients.orTypeManually')}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <Input
-              id="client-name"
-              label={t('quotes.new.clientName')}
-              value={clientName}
-              onChange={(event) => setClientName(event.target.value)}
-              placeholder="e.g. Acme Robotics"
-              required
+              id="piece-name"
+              label={t('quotes.new.pieceName')}
+              value={pieceName}
+              onChange={(event) => setPieceName(event.target.value)}
+              placeholder="e.g. Gearbox Housing"
               className="md:col-span-2"
             />
 

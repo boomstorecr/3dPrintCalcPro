@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { deleteField, doc, getDoc } from 'firebase/firestore';
 import { useTranslation } from 'react-i18next';
 import { saveAs } from 'file-saver';
+import { Receipt } from 'lucide-react';
 import CostBreakdown from '../../components/CostBreakdown';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -74,6 +75,10 @@ function normalizeStatusKey(status) {
 
 function getClientName(quote) {
   return quote?.client_name || quote?.clientName || quote?.client?.name || 'Unnamed Client';
+}
+
+function getPieceName(quote) {
+  return quote?.piece_name || quote?.pieceName || '';
 }
 
 function getDesignUrl(quote) {
@@ -284,6 +289,7 @@ export default function QuotePreviewPage() {
 
   const currency = useMemo(() => getCurrency(quote, company), [quote, company]);
   const clientName = useMemo(() => getClientName(quote), [quote]);
+  const pieceName = useMemo(() => getPieceName(quote), [quote]);
   const designUrl = useMemo(() => getDesignUrl(quote), [quote]);
   const quoteDate = useMemo(() => getQuoteDate(quote), [quote]);
   const expirationDate = useMemo(() => getExpirationDate(quote), [quote]);
@@ -523,6 +529,17 @@ export default function QuotePreviewPage() {
               {t('quotes.preview.duplicate')}
             </Button>
 
+            <Button
+              onClick={() => {
+                startTransition(() => {
+                  navigate(`/bills/new?quoteId=${quote.id}`);
+                });
+              }}
+            >
+              <Receipt className="w-4 h-4 mr-2" />
+              {t('bills.createBill')}
+            </Button>
+
             <Button onClick={handleDownloadPdf} loading={generatingPdf} disabled={generatingDocx || deleting}>
               {generatingPdf ? t('quotes.preview.generatingPDF') : t('quotes.preview.exportPDF')}
             </Button>
@@ -574,6 +591,10 @@ export default function QuotePreviewPage() {
           <div className="grid grid-cols-1 gap-4 rounded-md border border-gray-200 bg-gray-50 p-4 md:grid-cols-2">
             <p className="text-sm text-gray-700">
               <span className="font-medium text-gray-900">{t('quotes.preview.client')}:</span> {clientName}
+            </p>
+            <p className="text-sm text-gray-700">
+              <span className="font-medium text-gray-900">{t('quotes.new.pieceName')}:</span>{' '}
+              {pieceName || t('common.noData')}
             </p>
             <p className="text-sm text-gray-700">
               <span className="font-medium text-gray-900">{t('common.status')}:</span>{' '}

@@ -107,6 +107,10 @@ function resolveClientName(quoteData) {
   );
 }
 
+function resolvePieceName(quoteData) {
+  return String(quoteData?.piece_name || quoteData?.pieceName || '').trim();
+}
+
 function resolveNotes(quoteData) {
   return String(quoteData?.notes || '').trim();
 }
@@ -224,6 +228,7 @@ export async function generateQuotePDF(quoteData, companyData) {
   const quoteDate = getQuoteDate(quoteData);
   const expirationDate = getExpirationDate(quoteData);
   const clientName = resolveClientName(quoteData);
+  const pieceName = resolvePieceName(quoteData);
 
   const materials = resolveMaterials(quoteData);
   const breakdown = resolveBreakdown(quoteData);
@@ -270,15 +275,24 @@ export async function generateQuotePDF(quoteData, companyData) {
   doc.setDrawColor(220);
   const estimatedDeliveryDays = toNumber(quoteData?.estimated_delivery_days);
   const hasEstimatedDelivery = estimatedDeliveryDays > 0;
-  const infoBoxHeight = hasEstimatedDelivery ? 90 : 72;
+  const hasPieceName = Boolean(pieceName);
+  const infoBoxHeight = hasEstimatedDelivery ? 106 : hasPieceName ? 88 : 72;
   doc.roundedRect(marginX, cursorY, pageWidth - marginX * 2, infoBoxHeight, 6, 6);
 
   doc.setFontSize(11);
   doc.text(`${i18n.t('document.quoteDate')}: ${formatDate(quoteDate)}`, marginX + 12, cursorY + 22);
   doc.text(`${i18n.t('document.expirationDate')}: ${formatDate(expirationDate)}`, marginX + 12, cursorY + 40);
   doc.text(`${i18n.t('document.client')}: ${clientName}`, marginX + 12, cursorY + 58);
+  if (hasPieceName) {
+    doc.text(`${i18n.t('quotes.new.pieceName')}: ${pieceName}`, marginX + 12, cursorY + 76);
+  }
   if (hasEstimatedDelivery) {
-    doc.text(`${i18n.t('document.estimatedDelivery')}: ${estimatedDeliveryDays} ${i18n.t('document.days')}`, marginX + 12, cursorY + 76);
+    const estimatedDeliveryY = hasPieceName ? 94 : 76;
+    doc.text(
+      `${i18n.t('document.estimatedDelivery')}: ${estimatedDeliveryDays} ${i18n.t('document.days')}`,
+      marginX + 12,
+      cursorY + estimatedDeliveryY
+    );
   }
 
   cursorY += infoBoxHeight + 18;

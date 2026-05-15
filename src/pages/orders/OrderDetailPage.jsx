@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { startTransition, useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
+import { Receipt } from 'lucide-react';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
@@ -11,7 +12,7 @@ import OrderProgressBar from '../../components/OrderProgressBar';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { db } from '../../lib/firebase';
-import { getOrder, updatePieceStatus, updatePieceNotes, deleteOrder } from '../../lib/orders';
+import { getOrder, updatePieceStatus, updatePieceNotes, deleteOrder, cancelOrder } from '../../lib/orders';
 import { useTranslation } from 'react-i18next';
 
 function getPieceStatusOptions(t) {
@@ -26,6 +27,7 @@ const STATUS_BADGE_VARIANT = {
   pending: 'neutral',
   in_progress: 'info',
   completed: 'success',
+  cancelled: 'danger',
 };
 
 function statusLabel(status, t) {
@@ -33,6 +35,7 @@ function statusLabel(status, t) {
     pending: t('orders.detail.pending'),
     in_progress: t('orders.detail.inProgress'),
     completed: t('orders.detail.completed'),
+    cancelled: t('orders.detail.cancelled', { defaultValue: 'Cancelled' }),
   };
 
   return labels[status] || status;
@@ -104,6 +107,8 @@ export default function OrderDetailPage() {
   const [updatingPiece, setUpdatingPiece] = useState(null); // pieceId being updated
   const [deleting, setDeleting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [editingNotes, setEditingNotes] = useState({}); // { pieceId: notesValue }
   const [savingNotes, setSavingNotes] = useState(null); // pieceId being saved
   const [copied, setCopied] = useState(false);
@@ -297,6 +302,26 @@ export default function OrderDetailPage() {
     }
   };
 
+  const handleCancelOrder = async () => {
+    if (!order) {
+      return;
+    }
+
+    setCancelling(true);
+
+    try {
+      await cancelOrder(order.id);
+      success(t('toast.orderUpdated', { defaultValue: 'Order updated.' }));
+      setOrder((prev) => (prev ? { ...prev, status: 'cancelled' } : prev));
+      setIsCancelModalOpen(false);
+    } catch (cancelError) {
+      console.error('[OrderDetailPage] Failed to cancel order', cancelError);
+      error(t('toast.saveFailed'));
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[320px] items-center justify-center">
@@ -339,9 +364,33 @@ export default function OrderDetailPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {order.status === 'completed' && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  startTransition(() => {
+                    navigate(
+                      `/bills/new?orderId=${order.id}&quoteId=${order.quote_id || order.quoteId || ''}`
+                    );
+                  });
+                }}
+              >
+                <Receipt className="mr-2 h-4 w-4" />
+                {t('bills.createBill')}
+              </Button>
+            )}
             <Button variant="secondary" onClick={handleCopyLink} disabled={!publicUrl}>
               {copied ? t('orders.detail.copied') : t('orders.detail.share')}
             </Button>
+            {order.status !== 'cancelled' && (
+              <Button
+                variant="danger"
+                onClick={() => setIsCancelModalOpen(true)}
+                disabled={cancelling}
+              >
+                {t('orders.detail.cancelOrder', { defaultValue: 'Cancel Order' })}
+              </Button>
+            )}
             <Button variant="danger" onClick={() => setIsDeleteModalOpen(true)} disabled={deleting}>
               {t('orders.detail.delete')}
             </Button>
@@ -421,7 +470,7 @@ export default function OrderDetailPage() {
                   value={piece.status}
                   onChange={(e) => handlePieceStatusChange(piece.id, e.target.value)}
                   options={getPieceStatusOptions(t)}
-                  disabled={updatingPiece === piece.id}
+                  disabled={updatingPiece === piece.id || order.status === 'cancelled'}
                 />
 
                 <div className="space-y-1">
@@ -475,6 +524,27 @@ export default function OrderDetailPage() {
             </Button>
             <Button variant="danger" onClick={handleDelete} loading={deleting}>
               {t('orders.detail.delete')}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isCancelModalOpen}
+        onClose={() => setIsCancelModalOpen(false)}
+        title={t('orders.detail.cancelOrder', { defaultValue: 'Cancel Order' })}
+      >
+        <div className="space-y-5">
+          <p className="text-sm text-gray-700">
+            {t('orders.detail.cancelConfirm', { defaultValue: 'Are you sure you want to cancel this order? Materials consumed will be restored to inventory.' })}
+          </p>
+
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button variant="secondary" onClick={() => setIsCancelModalOpen(false)} disabled={cancelling}>
+              {t('orders.detail.cancel', { defaultValue: 'Go Back' })}
+            </Button>
+            <Button variant="danger" onClick={handleCancelOrder} loading={cancelling}>
+              {t('orders.detail.cancelOrder', { defaultValue: 'Cancel Order' })}
             </Button>
           </div>
         </div>

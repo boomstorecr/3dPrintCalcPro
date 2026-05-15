@@ -99,7 +99,7 @@ export async function getBillsByMonth(companyId, year, month) {
     where('status', '==', 'paid'),
     where('billing_date', '>=', start),
     where('billing_date', '<', end),
-    orderBy('billing_date', 'asc')
+    orderBy('billing_date', 'desc')
   );
 
   const snap = await getDocs(q);
@@ -123,7 +123,7 @@ export async function getMonthlyIncomeSummary(companyId, monthsBack = 6) {
       where('status', '==', 'paid'),
       where('billing_date', '>=', start),
       where('billing_date', '<', end),
-      orderBy('billing_date', 'asc')
+      orderBy('billing_date', 'desc')
     );
 
     const snap = await getDocs(q);

@@ -8,6 +8,7 @@ export const CURRENCY_OPTIONS = [
   { label: 'GBP - British Pound', value: 'GBP' },
   { label: 'MXN - Mexican Peso', value: 'MXN' },
   { label: 'CRC - Costa Rican Colón', value: 'CRC' },
+  { label: 'COP - Colombian Peso', value: 'COP' },
   { label: 'BRL - Brazilian Real', value: 'BRL' },
   { label: 'CAD - Canadian Dollar', value: 'CAD' },
   { label: 'AUD - Australian Dollar', value: 'AUD' },
